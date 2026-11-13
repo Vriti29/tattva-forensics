@@ -1,0 +1,22 @@
+{
+  "records": [
+    {
+      "timestamp": "2026-11-09 09:00:00",
+      "event_type": "LOGIN_SUCCESS",
+      "user_id": "user01",
+      "ip_address": "192.168.1.10"
+    },
+    {
+      "timestamp": "2026-11-09 09:02:00",
+      "event_type": "LOGIN_FAILED",
+      "user_id": "user02",
+      "ip_address": "192.168.1.15"
+    },
+    {
+      "timestamp": "2026-11-09 09:03:00",
+      "event_type": "LOGIN_FAILED",
+      "user_id": "user02",
+      "ip_address": "192.168.1.15"
+    }
+  ]
+}
