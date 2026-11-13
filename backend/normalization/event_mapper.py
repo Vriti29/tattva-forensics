@@ -1,0 +1,24 @@
+EVENT_MAPPINGS = {
+    "LOGIN_SUCCESS": "LOGIN_SUCCESS",
+    "LOGIN_OK": "LOGIN_SUCCESS",
+    "AUTH_SUCCESS": "LOGIN_SUCCESS",
+    "USER_LOGIN_SUCCESS": "LOGIN_SUCCESS",
+    "LOGIN_FAILED": "LOGIN_FAILED",
+    "AUTH_FAILURE": "LOGIN_FAILED",
+    "USER_LOGIN_FAILED": "LOGIN_FAILED",
+    "LOGOUT": "LOGOUT",
+    "FILE_ACCESS": "FILE_ACCESS",
+    "FILE_MODIFIED": "FILE_MODIFIED",
+    "FILE_DELETED": "FILE_DELETED",
+    "DATA_TRANSFER": "DATA_TRANSFER",
+    "CONNECTION_ALLOWED": "CONNECTION_ALLOWED",
+    "CONNECTION_BLOCKED": "CONNECTION_BLOCKED",
+    "ARCHIVE_CREATED": "ARCHIVE_CREATED",
+    "ARCHIVE_EXTRACTED": "ARCHIVE_EXTRACTED"
+}
+
+def map_event_type(original_event_type):
+    event = original_event_type.strip().upper()
+    if event not in EVENT_MAPPINGS:
+        raise ValueError(f"Unknown event type: {original_event_type}")
+    return EVENT_MAPPINGS[event]
