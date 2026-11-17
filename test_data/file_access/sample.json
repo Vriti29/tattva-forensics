@@ -1,0 +1,7 @@
+{
+  "records": [
+    {"timestamp":"2026-11-09 09:05:00","event_type":"FILE_ACCESS","user_id":"user01","file_id":"FILE-102","operation":"READ","file_path":"/confidential/report.pdf","host_id":"HOST-01"},
+    {"timestamp":"2026-11-09 09:07:00","event_type":"FILE_MODIFIED","user_id":"user01","file_id":"FILE-103","operation":"WRITE","file_path":"/documents/data.csv","host_id":"HOST-01"},
+    {"timestamp":"2026-11-09 09:10:00","event_type":"FILE_DELETED","user_id":"user02","file_id":"FILE-104","operation":"DELETE","file_path":"/temp/backup.zip","host_id":"HOST-02"}
+  ]
+}

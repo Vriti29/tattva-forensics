@@ -1,0 +1,4 @@
+timestamp,event_type,user_id,file_id,operation,file_path,host_id
+2026-11-09 09:05:00,FILE_ACCESS,user01,FILE-102,READ,/confidential/report.pdf,HOST-01
+2026-11-09 09:07:00,FILE_MODIFIED,user01,FILE-103,WRITE,/documents/data.csv,HOST-01
+2026-11-09 09:10:00,FILE_DELETED,user02,FILE-104,DELETE,/temp/backup.zip,HOST-02
