@@ -1,0 +1,6 @@
+{
+  "records": [
+    {"timestamp":"2026-11-09 09:08:00","event_type":"ARCHIVE_CREATED","user_id":"user01","archive_id":"ARC-101","archive_path":"/backup/report.zip","archive_size_bytes":204800,"host_id":"HOST-01"},
+    {"timestamp":"2026-11-09 09:20:00","event_type":"ARCHIVE_EXTRACTED","user_id":"user02","archive_id":"ARC-102","archive_path":"/temp/data.zip","archive_size_bytes":102400,"host_id":"HOST-02"}
+  ]
+}
