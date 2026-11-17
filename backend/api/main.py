@@ -6,13 +6,27 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 
 from backend.pipeline import process_evidence_file
 
+from backend.simulation.forensic_adapter import (
+    analyze_evidence as run_forensic_analysis
+)
+
+from backend.api.simulation_setup import install_simulation_api
+
 app = FastAPI(
     title="Tattva Forensics API",
     description="AI-assisted digital evidence analysis and correlation",
     version="1.0.0"
 )
 INVESTIGATIONS = {}
+SIMULATION_EVIDENCE_STORE = {}
+BASELINE_ANALYSIS_STORE = {}
 ALLOWED_SOURCES = {"authentication", "file", "network", "archive"}
+install_simulation_api(
+    app=app,
+    analysis_function=run_forensic_analysis,
+    evidence_store=SIMULATION_EVIDENCE_STORE,
+    baseline_store=BASELINE_ANALYSIS_STORE
+)
 
 @app.get("/")
 def home():
@@ -51,9 +65,28 @@ async def analyze_evidence(
                 temp_file.write(chunk)
 
         result = process_evidence_file(temp_path, source_type)
+
         investigation_id = f"INV-{uuid4().hex[:10].upper()}"
+        baseline_analysis_id = f"ANL-{uuid4().hex[:10].upper()}"
+
+        # Preserve the original normalized evidence records.
+        SIMULATION_EVIDENCE_STORE[investigation_id] = (
+            result["evidence_records"]
+        )
+
+        # Run the actual forensic engines to generate
+        # the baseline in the same format used by simulations.
+        baseline_analysis = run_forensic_analysis(
+            result["evidence_records"]
+        )
+
+        BASELINE_ANALYSIS_STORE[baseline_analysis_id] = (
+            baseline_analysis
+        )
 
         result["investigation_id"] = investigation_id
+        result["baseline_analysis_id"] = baseline_analysis_id
+
         INVESTIGATIONS[investigation_id] = result
 
         return result
