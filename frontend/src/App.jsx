@@ -5,6 +5,8 @@ import "./App.css";
 function App() {
   const [activePage, setActivePage] = useState("Dashboard");
   const [selectedEvidence, setSelectedEvidence] = useState(null);
+  const [selectedScenario, setSelectedScenario] = useState("Remove suspicious network activity");
+const [simulationRun, setSimulationRun] = useState(false);
 
   const menuItems = [
     "Dashboard",
@@ -307,7 +309,7 @@ function App() {
             </section>
           </>
         
-) : activePage === "Evidence Graph" ? (
+ ) : activePage === "Evidence Graph" ? (
   <>
     <section className="graph-page">
 
@@ -430,25 +432,130 @@ function App() {
 
     </section>
   </>
-) : (
+        
+) : activePage === "What-If Simulator" ? (
+  <section className="simulator-page">
+    <div className="page-heading">
+      <div>
+        <span className="eyebrow">INVESTIGATION WORKSPACE</span>
+        <h2>What-If Simulator</h2>
+        <p>Explore hypothetical scenarios and compare investigation outcomes.</p>
+      </div>
+    </div>
 
-          <section className="welcome-card page-placeholder">
-            <div>
-              <span className="eyebrow">TATTVA FORENSICS WORKSPACE</span>
-              <h2>{activePage}</h2>
-              <p>
-                This module is being prepared. Its interface and functionality
-                will be added in the next development steps.
-              </p>
-              <button
-                className="primary-button"
-                onClick={() => setActivePage("Dashboard")}
-              >
-                Back to Dashboard
-              </button>
-            </div>
-          </section>
-        )}
+    <div className="simulator-card">
+      <h3>Configure Simulation</h3>
+      <p>Select a hypothetical scenario to explore.</p>
+
+      <label>Choose a scenario</label>
+      <select
+        value={selectedScenario}
+        onChange={(e) => {
+          setSelectedScenario(e.target.value);
+          setSimulationRun(false);
+        }}
+      >
+        <option>Remove suspicious network activity</option>
+        <option>Exclude system log evidence</option>
+        <option>Exclude browser history evidence</option>
+      </select>
+
+      <button
+        className="primary-button"
+        onClick={() => setSimulationRun(true)}
+      >
+        Run Simulation
+      </button>
+    </div>
+
+    {simulationRun && (
+      <div className="simulation-result">
+        <span className="eyebrow">DEMO SIMULATION RESULT</span>
+        <h3>Scenario Analysis Complete</h3>
+        <p><strong>Scenario:</strong> {selectedScenario}</p>
+        <p>
+          This is a sample interface preview. Actual simulation results
+          will be supplied by the What-If simulation engine.
+        </p>
+        <div className="result-status">Awaiting backend integration</div>
+      </div>
+    )}
+  </section>
+) : activePage === "Reports" ? (
+  <section className="reports-page">
+    <div className="page-heading">
+      <div>
+        <span className="eyebrow">INVESTIGATION WORKSPACE</span>
+        <h2>Investigation Reports</h2>
+        <p>Review and export investigation information.</p>
+      </div>
+      <button
+        className="primary-button"
+        onClick={() => window.print()}
+      >
+        Export / Print Report
+      </button>
+    </div>
+
+    <div className="report-summary">
+      <div className="report-card">
+        <span>Total Evidence</span>
+        <h3>40</h3>
+      </div>
+      <div className="report-card">
+        <span>Detected Findings</span>
+        <h3>08</h3>
+      </div>
+      <div className="report-card">
+        <span>Relationships</span>
+        <h3>12</h3>
+      </div>
+      <div className="report-card">
+        <span>Investigation Status</span>
+        <h3>Active</h3>
+      </div>
+    </div>
+
+    <div className="report-details">
+      <h3>Investigation Overview</h3>
+      <p>
+        This report provides a summary of the digital evidence
+        collected and organized within the Tattva Forensics workspace.
+      </p>
+
+      <h3>Evidence Records</h3>
+      <ul>
+        <li>EV-001 — System Log File</li>
+        <li>EV-002 — Network Traffic</li>
+        <li>EV-003 — Disk Image</li>
+        <li>EV-004 — Browser History</li>
+      </ul>
+
+      <h3>Report Note</h3>
+      <p>
+        The displayed figures and records are illustrative sample data.
+        Verified investigation findings will be added after backend integration.
+      </p>
+    </div>
+  </section>
+) : (
+  <section className="welcome-card page-placeholder">
+    <div>
+      <span className="eyebrow">TATTVA FORENSICS WORKSPACE</span>
+      <h2>{activePage}</h2>
+      <p>
+        This module is being prepared. Its interface and functionality
+        will be added in the next development steps.
+      </p>
+      <button
+        className="primary-button"
+        onClick={() => setActivePage("Dashboard")}
+      >
+        Back to Dashboard
+      </button>
+    </div>
+  </section>
+)}
 
         <footer className="footer">
           Tattva Forensics · AI-Assisted Digital Evidence Correlation
