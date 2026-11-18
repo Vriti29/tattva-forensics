@@ -4,6 +4,7 @@ import "./App.css";
 
 function App() {
   const [activePage, setActivePage] = useState("Dashboard");
+  const [selectedEvidence, setSelectedEvidence] = useState(null);
 
   const menuItems = [
     "Dashboard",
@@ -228,7 +229,209 @@ function App() {
   </div>
 </section>
 </>
+) : activePage === "Incident Timeline" ? (
+          <>
+            <section className="timeline-page">
+              <div className="page-heading">
+                <div>
+                  <span className="eyebrow">INVESTIGATION WORKSPACE</span>
+                  <h2>Incident Timeline</h2>
+                  <p>
+                    View and track important events in chronological order.
+                  </p>
+                </div>
+              </div>
+
+              <div className="information-card">
+                <h3>Investigation Activity</h3>
+                <p>
+                  A chronological record of events identified during the
+                  investigation.
+                </p>
+              </div>
+
+              <div className="timeline-container">
+
+                <div className="timeline-item">
+                  <div className="timeline-dot"></div>
+                  <div className="timeline-content">
+                    <span className="timeline-time">09:15 AM · 18 Nov 2026</span>
+                    <h3>System Log Generated</h3>
+                    <p>
+                      A new system log entry was recorded and added to the
+                      investigation.
+                    </p>
+                    <span className="timeline-evidence">Evidence: EV-001</span>
+                  </div>
+                </div>
+
+                <div className="timeline-item">
+                  <div className="timeline-dot"></div>
+                  <div className="timeline-content">
+                    <span className="timeline-time">10:30 AM · 18 Nov 2026</span>
+                    <h3>Network Traffic Captured</h3>
+                    <p>
+                      Network traffic data was collected for further
+                      examination.
+                    </p>
+                    <span className="timeline-evidence">Evidence: EV-002</span>
+                  </div>
+                </div>
+
+                <div className="timeline-item">
+                  <div className="timeline-dot"></div>
+                  <div className="timeline-content">
+                    <span className="timeline-time">11:45 AM · 18 Nov 2026</span>
+                    <h3>Disk Image Added</h3>
+                    <p>
+                      A disk image was added to the evidence collection.
+                    </p>
+                    <span className="timeline-evidence">Evidence: EV-003</span>
+                  </div>
+                </div>
+
+                <div className="timeline-item">
+                  <div className="timeline-dot"></div>
+                  <div className="timeline-content">
+                    <span className="timeline-time">01:00 PM · 18 Nov 2026</span>
+                    <h3>Browser History Received</h3>
+                    <p>
+                      Browser history evidence was received and marked as
+                      pending review.
+                    </p>
+                    <span className="timeline-evidence">Evidence: EV-004</span>
+                  </div>
+                </div>
+
+              </div>
+            </section>
+          </>
+        
+) : activePage === "Evidence Graph" ? (
+  <>
+    <section className="graph-page">
+
+      <div className="page-heading">
+        <div>
+          <span className="eyebrow">INVESTIGATION WORKSPACE</span>
+          <h2>Evidence Graph</h2>
+          <p>
+            Explore relationships and connections between digital evidence.
+          </p>
+        </div>
+      </div>
+
+      <div className="information-card">
+        <h3>Evidence Relationship Map</h3>
+        <p>
+          Visual representation of evidence items and their associated
+          relationships.
+        </p>
+      </div>
+
+      <div className="graph-layout">
+
+        <div className="graph-canvas">
+
+          <svg className="graph-connections" viewBox="0 0 700 420">
+            <line x1="350" y1="210" x2="150" y2="90" />
+            <line x1="350" y1="210" x2="550" y2="90" />
+            <line x1="350" y1="210" x2="150" y2="330" />
+            <line x1="350" y1="210" x2="550" y2="330" />
+          </svg>
+
+          <div className="graph-node node-center">
+            <span>CASE</span>
+            <strong>Investigation</strong>
+          </div>
+
+          
+<div
+  className="graph-node node-one"
+  onClick={() =>
+    setSelectedEvidence({
+      id: "EV-001",
+      name: "System Log File",
+      type: "Log",
+      status: "Processed",
+      description: "System activity records collected during the investigation."
+    })
+  }
+>
+  <span>LOG</span>
+  <strong>EV-001</strong>
+  <small>System Log</small>
+</div>
+
+<div
+  className="graph-node node-two"
+  onClick={() =>
+    setSelectedEvidence({
+      id: "EV-002",
+      name: "Network Traffic",
+      type: "Network",
+      status: "Under Review",
+      description: "Network communication records collected for analysis."
+    })
+  }
+>
+  <span>NETWORK</span>
+  <strong>EV-002</strong>
+  <small>Network Traffic</small>
+</div>
+
+<div
+  className="graph-node node-three"
+  onClick={() =>
+    setSelectedEvidence({
+      id: "EV-003",
+      name: "Disk Image",
+      type: "Disk",
+      status: "Processed",
+      description: "A digital disk image retained for forensic examination."
+    })
+  }
+>
+  <span>DISK</span>
+  <strong>EV-003</strong>
+  <small>Disk Image</small>
+</div>
+
+<div
+  className="graph-node node-four"
+  onClick={() =>
+    setSelectedEvidence({
+      id: "EV-004",
+      name: "Browser History",
+      type: "Browser",
+      status: "Pending",
+      description: "Browser activity records awaiting forensic examination."
+    })
+  }
+>
+  <span>BROWSER</span>
+  <strong>EV-004</strong>
+  <small>Browser History</small>
+</div>
+
+
+        </div>
+
+        <div className="graph-legend">
+          <h3>Graph Legend</h3>
+          <p>Blue: Investigation node</p>
+          <p>Green: Log evidence</p>
+          <p>Orange: Network evidence</p>
+          <p>Purple: Disk evidence</p>
+          <p>Pink: Browser evidence</p>
+        </div>
+
+      </div>
+
+    </section>
+  </>
 ) : (
+
           <section className="welcome-card page-placeholder">
             <div>
               <span className="eyebrow">TATTVA FORENSICS WORKSPACE</span>
