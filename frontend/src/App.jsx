@@ -7,6 +7,46 @@ function App() {
   const [selectedEvidence, setSelectedEvidence] = useState(null);
   const [selectedScenario, setSelectedScenario] = useState("Remove suspicious network activity");
 const [simulationRun, setSimulationRun] = useState(false);
+const [searchQuery, setSearchQuery] = useState("");
+const [statusFilter, setStatusFilter] = useState("All");
+
+const [evidenceRecords] = useState([
+  {
+    id: "EV-001",
+    name: "System Log File",
+    type: "Log",
+    status: "Processed",
+  },
+  {
+    id: "EV-002",
+    name: "Network Traffic",
+    type: "Network",
+    status: "Under Review",
+  },
+  {
+    id: "EV-003",
+    name: "Disk Image",
+    type: "Disk",
+    status: "Processed",
+  },
+  {
+    id: "EV-004",
+    name: "Browser History",
+    type: "Browser",
+    status: "Pending",
+  },
+]);
+
+const filteredEvidence = evidenceRecords.filter((evidence) => {
+  const matchesSearch =
+    evidence.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    evidence.name.toLowerCase().includes(searchQuery.toLowerCase());
+
+  const matchesStatus =
+    statusFilter === "All" || evidence.status === statusFilter;
+
+  return matchesSearch && matchesStatus;
+});
 
   const menuItems = [
     "Dashboard",
@@ -18,7 +58,7 @@ const [simulationRun, setSimulationRun] = useState(false);
   ];
 
   const stats = [
-    { title: "Total Evidence", value: "40", note: "Evidence records", icon: "▣" },
+    { title: "Total Evidence", value: evidenceRecords.length.toString(), note: "Evidence records loaded", icon: "▣" },
     { title: "Active Investigations", value: "04", note: "Currently active", icon: "⌕" },
     { title: "Detected Findings", value: "08", note: "Findings identified", icon: "◈" },
     { title: "Relationships", value: "12", note: "Connections identified", icon: "⌘" },
@@ -98,7 +138,22 @@ const [simulationRun, setSimulationRun] = useState(false);
 
             <section className="stats-grid">
               {stats.map((stat) => (
-                <div className="stat-card" key={stat.title}>
+                <div
+  className="stat-card"
+  key={stat.title}
+  onClick={() => {
+  if (stat.title === "Total Evidence") {
+    setActivePage("Evidence Explorer");
+  } else if (stat.title === "Active Investigations") {
+    setActivePage("Incident Timeline");
+  } else if (stat.title === "Detected Findings") {
+    setActivePage("Evidence Graph");
+  } else if (stat.title === "Relationships") {
+    setActivePage("Evidence Graph");
+  }
+}}
+  style={{ cursor: stat.title === "Total Evidence" ? "pointer" : "default" }}
+>
                   <div className="stat-top">
                     <span>{stat.title}</span>
                     <span className="stat-icon">{stat.icon}</span>
@@ -188,6 +243,25 @@ const [simulationRun, setSimulationRun] = useState(false);
   <div className="information-card">
     <h3>Evidence Records</h3>
     <p>Sample evidence records for the frontend demonstration.</p>
+    <div className="evidence-controls">
+  <input
+    type="text"
+    placeholder="Search by evidence ID or name..."
+    value={searchQuery}
+    onChange={(e) => setSearchQuery(e.target.value)}
+  />
+
+  <select
+    value={statusFilter}
+    onChange={(e) => setStatusFilter(e.target.value)}
+  >
+    <option value="All">All statuses</option>
+    <option value="Processed">Processed</option>
+    <option value="Under Review">Under Review</option>
+    <option value="Pending">Pending</option>
+  </select>
+</div>
+
 
     <table className="evidence-table">
       <thead>
@@ -199,35 +273,44 @@ const [simulationRun, setSimulationRun] = useState(false);
         </tr>
       </thead>
 
-      <tbody>
-        {filteredEvidence.map((evidence) => (
-          <tr key={evidence.id}>
-            <td>{evidence.id}</td>
-            <td>{evidence.name}</td>
-            <td>{evidence.type}</td>
-            <td>{evidence.status}</td>
-          </tr>
-        ))}
-        <tr>
-          <td>EV-002</td>
-          <td>Network Traffic</td>
-          <td>Network</td>
-          <td>Under Review</td>
-        </tr>
-        <tr>
-          <td>EV-003</td>
-          <td>Disk Image</td>
-          <td>Disk</td>
-          <td>Processed</td>
-        </tr>
-        <tr>
-          <td>EV-004</td>
-          <td>Browser History</td>
-          <td>Browser</td>
-          <td>Pending</td>
-        </tr>
-      </tbody>
+     <tbody>
+  {filteredEvidence.length > 0 ? (
+    filteredEvidence.map((evidence) => (
+      <tr
+  key={evidence.id}
+  onClick={() => setSelectedEvidence(evidence)}
+  className="clickable-evidence-row"
+>
+        <td>{evidence.id}</td>
+        <td>{evidence.name}</td>
+        <td>{evidence.type}</td>
+        <td>{evidence.status}</td>
+      </tr>
+    ))
+  ) : (
+    <tr>
+      <td colSpan="4">No evidence records match your search.</td>
+    </tr>
+  )}
+</tbody>
     </table>
+    {selectedEvidence && (
+  <div className="evidence-details-panel">
+    <div className="details-header">
+      <h3>Evidence Details</h3>
+      <button onClick={() => setSelectedEvidence(null)}>
+        Close
+      </button>
+    </div>
+
+    <div className="details-content">
+      <p><strong>Evidence ID:</strong> {selectedEvidence.id}</p>
+      <p><strong>Evidence Name:</strong> {selectedEvidence.name}</p>
+      <p><strong>Evidence Type:</strong> {selectedEvidence.type}</p>
+      <p><strong>Status:</strong> {selectedEvidence.status}</p>
+    </div>
+  </div>
+)}
   </div>
 </section>
 </>
