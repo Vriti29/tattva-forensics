@@ -565,3 +565,284 @@ button {
 .evidence-table tbody tr:last-child td {
   border-bottom: none;
 }
+
+/* INCIDENT TIMELINE */
+
+.timeline-page {
+  padding-bottom: 40px;
+}
+
+.timeline-page .page-heading h2 {
+  color: #19345b;
+  font-size: 28px;
+  margin: 12px 0;
+}
+
+.timeline-page .page-heading p {
+  color: #71829b;
+  font-size: 14px;
+}
+
+.timeline-page .information-card {
+  margin: 25px 0 35px;
+}
+
+.timeline-container {
+  position: relative;
+  max-width: 850px;
+  margin: 0 auto;
+  padding: 10px 0 10px 35px;
+}
+
+.timeline-container::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 15px;
+  bottom: 20px;
+  width: 3px;
+  background: #c6dcf7;
+  border-radius: 5px;
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 25px;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: -30px;
+  top: 25px;
+  width: 15px;
+  height: 15px;
+  background: #287bd1;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px #c6dcf7;
+}
+
+.timeline-content {
+  background: #ffffff;
+  border: 1px solid #e3eaf3;
+  border-radius: 12px;
+  padding: 22px 25px;
+  box-shadow: 0 4px 15px rgba(25, 52, 91, 0.05);
+}
+
+.timeline-time {
+  color: #287bd1;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.timeline-content h3 {
+  color: #19345b;
+  font-size: 17px;
+  margin: 10px 0;
+}
+
+.timeline-content p {
+  color: #71829b;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.timeline-evidence {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 6px 11px;
+  background: #edf5ff;
+  color: #287bd1;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.timeline-item:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 600px) {
+  .timeline-container {
+    padding-left: 30px;
+  }
+
+  .timeline-content {
+    padding: 17px;
+  }
+}
+
+/* EVIDENCE GRAPH */
+
+.graph-page {
+  padding-bottom: 40px;
+}
+
+.graph-page .page-heading h2 {
+  color: #19345b;
+  font-size: 28px;
+  margin: 12px 0;
+}
+
+.graph-page .page-heading p {
+  color: #71829b;
+  font-size: 14px;
+}
+
+.graph-page .information-card {
+  margin: 25px 0;
+}
+
+.graph-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 20px;
+  align-items: start;
+}
+
+.graph-canvas {
+  position: relative;
+  min-height: 480px;
+  background: #ffffff;
+  border: 1px solid #e3eaf3;
+  border-radius: 14px;
+  box-shadow: 0 4px 15px rgba(25, 52, 91, 0.05);
+  overflow: hidden;
+}
+
+.graph-connections {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.graph-connections line {
+  stroke: #9bbce4;
+  stroke-width: 2.5;
+  stroke-dasharray: 6 5;
+}
+
+.graph-node {
+  position: absolute;
+  width: 125px;
+  min-height: 85px;
+  padding: 12px 8px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 2px solid #dce8f7;
+  box-shadow: 0 5px 15px rgba(25, 52, 91, 0.10);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  text-align: center;
+  z-index: 2;
+}
+
+.graph-node span {
+  font-size: 9px;
+  font-weight: 700;
+  color: #71829b;
+  letter-spacing: 1px;
+}
+
+.graph-node strong {
+  font-size: 15px;
+  color: #19345b;
+}
+
+.graph-node small {
+  font-size: 10px;
+  color: #71829b;
+}
+
+.node-center {
+  width: 145px;
+  min-height: 95px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: #eaf3ff;
+  border-color: #287bd1;
+}
+
+.node-center strong {
+  color: #1765b4;
+}
+
+.node-one {
+  left: 8%;
+  top: 12%;
+  border-color: #42a77a;
+}
+
+.node-two {
+  right: 8%;
+  top: 12%;
+  border-color: #e5a044;
+}
+
+.node-three {
+  left: 8%;
+  bottom: 12%;
+  border-color: #9b7bd3;
+}
+
+.node-four {
+  right: 8%;
+  bottom: 12%;
+  border-color: #d77ba8;
+}
+
+.graph-legend {
+  background: #ffffff;
+  border: 1px solid #e3eaf3;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(25, 52, 91, 0.05);
+}
+
+.graph-legend h3 {
+  color: #19345b;
+  font-size: 16px;
+  margin-bottom: 18px;
+}
+
+.graph-legend p {
+  color: #71829b;
+  font-size: 12px;
+  margin: 14px 0;
+  line-height: 1.5;
+}
+
+@media (max-width: 850px) {
+  .graph-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .graph-canvas {
+    min-height: 430px;
+  }
+
+  .graph-legend {
+    width: 100%;
+  }
+}
+
+@media (max-width: 500px) {
+  .graph-node {
+    width: 100px;
+  }
+
+  .node-center {
+    width: 120px;
+  }
+
+  .graph-node strong {
+    font-size: 12px;
+  }
+}
