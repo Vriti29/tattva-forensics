@@ -5,7 +5,61 @@ import "./App.css";
 function App() {
   const [activePage, setActivePage] = useState("Dashboard");
   const [selectedEvidence, setSelectedEvidence] = useState(null);
+  const [evidenceRecords, setEvidenceRecords] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [sourceType, setSourceType] = useState("authentication");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [uploadSuccess, setUploadSuccess] = useState("");
+  const [investigationId, setInvestigationId] = useState(null);
+  const [analysisResult, setAnalysisResult] = useState(null);
 
+  const filteredEvidence = evidenceRecords.map((record) => ({
+    id: record.evidence_id,
+    name: record.file_path || record.raw_record_reference || record.evidence_id,
+    type: record.source_type,
+    status: "Processed",
+  }));
+  const handleUpload = async (event) => {
+    event.preventDefault();
+
+    if (!selectedFile) {
+      setUploadError("Please select a file first.");
+      return;
+    }
+
+    setUploading(true);
+    setUploadError("");
+    setUploadSuccess("");
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    formData.append("source_type", sourceType);
+
+    try {
+      const response = await fetch("/analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Evidence upload failed.");
+      }
+
+      setEvidenceRecords(data.evidence_records || []);
+      setInvestigationId(data.investigation_id);
+      setAnalysisResult(data);
+
+      setUploadSuccess("Evidence uploaded and analyzed successfully!");
+      setSelectedFile(null);
+    } catch (error) {
+      setUploadError(error.message);
+    } finally {
+      setUploading(false);
+    }
+  };
   const menuItems = [
     "Dashboard",
     "Evidence Explorer",
@@ -92,6 +146,50 @@ function App() {
                 <span className="status-dot"></span>
                 SYSTEM READY
               </div>
+            </section>
+
+            <section className="information-card">
+              <h3>Upload Digital Evidence</h3>
+              <p>Upload forensic logs for automated investigation and analysis.</p>
+
+              <form onSubmit={handleUpload}>
+                <input
+                  type="file"
+                  accept=".log,.txt,.csv,.json"
+                  onChange={(event) => setSelectedFile(event.target.files[0] || null)}
+                />
+
+                <select
+                  value={sourceType}
+                  onChange={(event) => setSourceType(event.target.value)}
+                >
+                  <option value="authentication">Authentication</option>
+                  <option value="file">File Activity</option>
+                  <option value="network">Network</option>
+                  <option value="archive">Archive</option>
+                </select>
+
+                <button type="submit" className="primary-button" disabled={uploading}>
+                  {uploading ? "Analyzing..." : "Upload & Analyze"}
+                </button>
+              </form>
+
+              {uploadError && <p role="alert">{uploadError}</p>}
+              {uploadSuccess && <p>{uploadSuccess}</p>}
+
+              {investigationId && (
+                <p>
+                  Investigation ID: <strong>{investigationId}</strong>
+                </p>
+              )}
+
+              {analysisResult && (
+                <p>
+                  Evidence: {analysisResult.evidence_records?.length || 0} |
+                  Findings: {analysisResult.detection?.total_findings || 0} |
+                  Anomalies: {analysisResult.anomaly_detection?.anomaly_count || 0}
+                </p>
+              )}
             </section>
 
             <section className="stats-grid">
@@ -418,6 +516,19 @@ function App() {
         </div>
 
         <div className="graph-legend">
+          {selectedEvidence && (
+            <div className="information-card">
+              <h3>{selectedEvidence.name}</h3>
+              <p>Evidence ID: {selectedEvidence.id}</p>
+              <p>Type: {selectedEvidence.type}</p>
+              <p>Status: {selectedEvidence.status}</p>
+              <p>{selectedEvidence.description}</p>
+
+              <button onClick={() => setSelectedEvidence(null)}>
+                Close Details
+              </button>
+            </div>
+          )}
           <h3>Graph Legend</h3>
           <p>Blue: Investigation node</p>
           <p>Green: Log evidence</p>
