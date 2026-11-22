@@ -1,4 +1,10 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import {
+  CreateInvestigationModal,
+  InvestigationList,
+  InvestigationWorkspace,
+} from "./InvestigationManagement.jsx";
+import { formatDate, requestJson } from "./investigationApi.js";
 import "./App.css";
 
 function App() {
@@ -10,7 +16,25 @@ function App() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
-  const [investigationId, setInvestigationId] = useState(null);
+  const [investigationId, setInvestigationId] = useState(() => {
+    try {
+      return window.localStorage.getItem("tattva:selected-investigation") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [investigation, setInvestigation] = useState(null);
+  const [investigations, setInvestigations] = useState([]);
+  const [investigationsLoading, setInvestigationsLoading] = useState(false);
+  const [investigationsError, setInvestigationsError] = useState("");
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState("");
+  const [workspaceNotice, setWorkspaceNotice] = useState("");
+  const [workspaceUploading, setWorkspaceUploading] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [findingsData, setFindingsData] = useState(null);
+  const [anomaliesData, setAnomaliesData] = useState(null);
+  const [investigationSummary, setInvestigationSummary] = useState(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   // Backend timeline and evidence graph data
   const [timelineRecords, setTimelineRecords] = useState([]);
@@ -42,6 +66,235 @@ function App() {
     type: record.source_type,
     status: "Processed",
   }));
+
+  const refreshInvestigations = useCallback(async () => {
+    setInvestigationsLoading(true);
+    setInvestigationsError("");
+    try {
+      const rows = await requestJson("/investigations");
+      const enrichedRows = await Promise.all(
+        rows.map(async (item) => {
+          const detail = await requestJson(
+            `/investigations/${encodeURIComponent(item.investigation_id)}`
+          );
+          return {
+            ...item,
+            total_findings:
+              detail.analysis?.detection?.total_findings ?? 0,
+          };
+        })
+      );
+      setInvestigations(enrichedRows);
+      return enrichedRows;
+    } catch (error) {
+      setInvestigationsError(error.message);
+      return null;
+    } finally {
+      setInvestigationsLoading(false);
+    }
+  }, []);
+
+  const loadInvestigation = useCallback(async (id) => {
+    setWorkspaceLoading(true);
+    setWorkspaceError("");
+    setInvestigation(null);
+    setAnalysisResult(null);
+    setEvidenceRecords([]);
+    setFindingsData(null);
+    setAnomaliesData(null);
+    setInvestigationSummary(null);
+    setTimelineRecords([]);
+    setGraphData({ nodes: [], edges: [] });
+    setSimulationResult(null);
+    setSimulationComparison(null);
+    setScenarioId(null);
+    setAuditHistory([]);
+    setSelectedEvidenceId("");
+    setSelectedEvidence(null);
+
+    try {
+      const detail = await requestJson(
+        `/investigations/${encodeURIComponent(id)}`
+      );
+      setInvestigation(detail);
+
+      const analysis = detail.analysis;
+      if (!analysis) {
+        return detail;
+      }
+
+      const endpoints = [
+        `/investigations/${encodeURIComponent(id)}/summary`,
+        `/investigations/${encodeURIComponent(id)}/findings`,
+        `/investigations/${encodeURIComponent(id)}/anomalies`,
+        `/investigations/${encodeURIComponent(id)}/timeline`,
+        `/investigations/${encodeURIComponent(id)}/graph`,
+      ];
+      const results = await Promise.allSettled(
+        endpoints.map((endpoint) => requestJson(endpoint))
+      );
+      const failures = results.flatMap((result, index) =>
+        result.status === "rejected"
+          ? [endpoints[index].split("/").pop()]
+          : []
+      );
+      const summary =
+        results[0].status === "fulfilled"
+          ? results[0].value
+          : {
+              total_evidence: analysis.evidence_records?.length ?? 0,
+              total_findings: analysis.detection?.total_findings ?? 0,
+              total_anomalies:
+                analysis.anomaly_detection?.anomaly_count ?? 0,
+              filename: analysis.metadata?.filename,
+              integrity_status: analysis.metadata?.integrity_status,
+            };
+      const findings =
+        results[1].status === "fulfilled"
+          ? results[1].value
+          : analysis.detection;
+      const anomalies =
+        results[2].status === "fulfilled"
+          ? results[2].value
+          : analysis.anomaly_detection;
+      const timeline =
+        results[3].status === "fulfilled"
+          ? results[3].value.timeline
+          : analysis.evidence_records || [];
+      const graph =
+        results[4].status === "fulfilled"
+          ? results[4].value
+          : analysis.correlation?.graph;
+
+      setInvestigationSummary(summary);
+      setFindingsData(findings);
+      setAnomaliesData(anomalies);
+      setEvidenceRecords(analysis.evidence_records || []);
+      setAnalysisResult({
+        ...analysis,
+        detection: findings,
+        anomaly_detection: anomalies,
+      });
+      setTimelineRecords(timeline || []);
+      setGraphData({
+        nodes: graph?.nodes || [],
+        edges: graph?.edges || [],
+      });
+      setWorkspaceError(
+        failures.length
+          ? `Some investigation data could not be refreshed (${failures.join(
+              ", "
+            )}). Showing the persisted analysis where available.`
+          : ""
+      );
+      return detail;
+    } catch (error) {
+      setWorkspaceError(error.message);
+      throw error;
+    } finally {
+      setWorkspaceLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    Promise.resolve().then(refreshInvestigations);
+  }, [refreshInvestigations]);
+
+  useEffect(() => {
+    try {
+      if (investigationId) {
+        window.localStorage.setItem(
+          "tattva:selected-investigation",
+          investigationId
+        );
+        Promise.resolve()
+          .then(() => loadInvestigation(investigationId))
+          .catch((error) => {
+            if (error.status === 404) {
+              setInvestigationId("");
+              setActivePage("Investigations");
+              setInvestigation(null);
+              setAnalysisResult(null);
+              setEvidenceRecords([]);
+              setFindingsData(null);
+              setAnomaliesData(null);
+              setTimelineRecords([]);
+              setGraphData({ nodes: [], edges: [] });
+            }
+          });
+      } else {
+        window.localStorage.removeItem("tattva:selected-investigation");
+      }
+    } catch {
+      if (investigationId) {
+        Promise.resolve()
+          .then(() => loadInvestigation(investigationId))
+          .catch(() => {});
+      }
+    }
+  }, [investigationId, loadInvestigation]);
+
+  const openInvestigation = useCallback(
+    (id) => {
+      setWorkspaceNotice("");
+      setWorkspaceError("");
+      setActivePage("Investigation Workspace");
+      if (id === investigationId) {
+        loadInvestigation(id).catch(() => {});
+      } else {
+        setInvestigationId(id);
+      }
+    },
+    [investigationId, loadInvestigation]
+  );
+
+  const handleInvestigationCreated = async (created) => {
+    await refreshInvestigations();
+    setShowCreateModal(false);
+    setWorkspaceNotice(
+      `Investigation created successfully. ID: ${created.investigation_id}`
+    );
+    setActivePage("Investigation Workspace");
+    setInvestigationId(created.investigation_id);
+  };
+
+  const handleAddEvidence = async (file, type) => {
+    if (!investigationId) {
+      setWorkspaceError("Select an investigation before adding evidence.");
+      return false;
+    }
+
+    setWorkspaceUploading(true);
+    setWorkspaceError("");
+    setWorkspaceNotice("");
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("source_type", type);
+
+    try {
+      const result = await requestJson(
+        `/investigations/${encodeURIComponent(investigationId)}/evidence`,
+        { method: "POST", body: formData }
+      );
+      setWorkspaceNotice(
+        `${result.evidence_file.filename} was uploaded and analyzed in this investigation.`
+      );
+      await refreshInvestigations();
+      try {
+        await loadInvestigation(investigationId);
+      } catch {
+        setWorkspaceError(
+          "Evidence was uploaded, but the latest investigation details could not be refreshed."
+        );
+      }
+      return true;
+    } catch (error) {
+      setWorkspaceError(error.message);
+      return false;
+    } finally {
+      setWorkspaceUploading(false);
+    }
+  };
   // Create and execute a What-If simulation using the backend.
   const handleRunSimulation = async () => {
     setSimulationError("");
@@ -172,7 +425,7 @@ function App() {
     }
   };
 
-  // Upload evidence and send it to the FastAPI backend.
+  // Keep the legacy quick-analysis workflow available from the dashboard.
   const handleUpload = async (event) => {
     event.preventDefault();
 
@@ -190,51 +443,19 @@ function App() {
     formData.append("source_type", sourceType);
 
     try {
-      const response = await fetch("/analyze", {
+      const data = await requestJson("/analyze", {
         method: "POST",
         body: formData,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.detail || "Evidence upload failed."
-        );
-      }
-
-      setEvidenceRecords(data.evidence_records || []);
-      setInvestigationId(data.investigation_id);
-      setAnalysisResult(data);
-
-      // Fetch real timeline and graph data for this investigation
-      const [timelineResponse, graphResponse] = await Promise.all([
-        fetch(`/investigations/${data.investigation_id}/timeline`),
-        fetch(`/investigations/${data.investigation_id}/graph`),
-      ]);
-
-      if (timelineResponse.ok) {
-        const timelineData = await timelineResponse.json();
-        setTimelineRecords(timelineData.timeline || []);
-      } else {
-        setTimelineRecords([]);
-      }
-
-      if (graphResponse.ok) {
-        const graphResult = await graphResponse.json();
-        setGraphData({
-          nodes: graphResult.nodes || [],
-          edges: graphResult.edges || [],
-        });
-      } else {
-        setGraphData({ nodes: [], edges: [] });
-      }
-
-      setUploadSuccess(
-        "Evidence uploaded and analyzed successfully!"
+      setWorkspaceNotice(
+        `Evidence analyzed successfully. Investigation ID: ${data.investigation_id}`
       );
-
+      setActivePage("Investigation Workspace");
+      setInvestigationId(data.investigation_id);
+      setUploadSuccess(`Analysis complete for ${data.investigation_id}.`);
       setSelectedFile(null);
+      await refreshInvestigations();
     } catch (error) {
       setUploadError(error.message);
     } finally {
@@ -243,77 +464,55 @@ function App() {
   };
 
   const menuItems = [
-    "Dashboard",
-    "Evidence Explorer",
-    "Incident Timeline",
-    "Evidence Graph",
-    "What-If Simulator",
-    "Reports",
+    { label: "Dashboard", icon: "▦" },
+    { label: "Evidence Explorer", icon: "▣" },
+    { label: "Incident Timeline", icon: "◷" },
+    { label: "Evidence Graph", icon: "◎" },
+    { label: "What-If Simulator", icon: "⇄" },
+    { label: "Reports", icon: "▤" },
+    { label: "Investigations", icon: "⌕" },
   ];
 
-  // Dashboard statistics are calculated from the latest backend analysis.
-  // The current API response represents the investigation most recently uploaded.
-  const totalEvidence = evidenceRecords.length;
-  const totalInvestigations = investigationId ? 1 : 0;
-  const totalFindings = analysisResult?.detection?.total_findings ?? 0;
-  const totalRelationships =
-    analysisResult?.correlation?.total_relationships ??
-    analysisResult?.correlation?.relationships?.length ??
-    0;
+  const totalInvestigations = investigations.length;
+  const activeInvestigations = investigations.filter(
+    (item) => !["completed", "closed"].includes(item.status.toLowerCase())
+  ).length;
+  const totalEvidenceFiles = investigations.reduce(
+    (total, item) => total + (item.evidence_file_count || 0),
+    0
+  );
+  const totalFindings = investigations.reduce(
+    (total, item) => total + (item.total_findings || 0),
+    0
+  );
 
   const stats = [
     {
-      title: "Total Evidence",
-      value: String(totalEvidence),
-      note: "Evidence records",
+      title: "Total Investigations",
+      value: String(totalInvestigations),
+      note: "Cases in this workspace",
       icon: "▣",
     },
     {
       title: "Active Investigations",
-      value: String(totalInvestigations),
-      note: "Currently loaded",
+      value: String(activeInvestigations),
+      note: "Not completed or closed",
       icon: "⌕",
     },
     {
-      title: "Detected Findings",
-      value: String(totalFindings),
-      note: "Findings identified",
+      title: "Evidence Files",
+      value: String(totalEvidenceFiles),
+      note: "Files across investigations",
       icon: "◈",
     },
     {
-      title: "Relationships",
-      value: String(totalRelationships),
-      note: "Connections identified",
+      title: "Total Findings",
+      value: String(totalFindings),
+      note: "Findings across investigations",
       icon: "⌘",
     },
   ];
-
-  const activities = [
-    {
-      title: "New evidence uploaded",
-      detail: "Evidence record EVD-001 added.",
-      time: "10 minutes ago",
-      color: "blue",
-    },
-    {
-      title: "Finding detected",
-      detail: "Suspicious activity identified in Case #104.",
-      time: "35 minutes ago",
-      color: "purple",
-    },
-    {
-      title: "Evidence relationship identified",
-      detail: "Two digital evidence records connected.",
-      time: "1 hour ago",
-      color: "green",
-    },
-    {
-      title: "Investigation updated",
-      detail: "Case #102 status changed.",
-      time: "3 hours ago",
-      color: "orange",
-    },
-  ];
+  const recentInvestigations = investigations.slice(0, 5);
 
   return (
     <div className="app-container">
@@ -330,19 +529,16 @@ function App() {
         <p className="menu-heading">WORKSPACE</p>
 
         <nav>
-          {menuItems.map((item, index) => (
+          {menuItems.map((item) => (
             <button
-              key={item}
+              key={item.label}
               className={`nav-item ${
-                activePage === item ? "active" : ""
+                activePage === item.label ? "active" : ""
               }`}
-              onClick={() => setActivePage(item)}
+              onClick={() => setActivePage(item.label)}
             >
-              <span className="nav-icon">
-                {["▦", "▣", "◷", "◎", "⇄", "▤"][index]}
-              </span>
-
-              {item}
+              <span className="nav-icon">{item.icon}</span>
+              {item.label}
             </button>
           ))}
         </nav>
@@ -367,7 +563,10 @@ function App() {
             <h1>{activePage}</h1>
           </div>
 
-          <button className="primary-button">
+          <button
+            className="primary-button"
+            onClick={() => setShowCreateModal(true)}
+          >
             + New Investigation
           </button>
         </header>
@@ -454,27 +653,16 @@ function App() {
               )}
 
               {uploadSuccess && (
-                <p>{uploadSuccess}</p>
-              )}
-
-              {investigationId && (
-                <p>
-                  Investigation ID:{" "}
-                  <strong>{investigationId}</strong>
+                <p className="success-message" role="status">
+                  {uploadSuccess}
                 </p>
               )}
 
-              {analysisResult && (
+              {investigationId && investigation && (
                 <p>
-                  Evidence:{" "}
-                  {analysisResult.evidence_records?.length || 0}
-                  {" | "}
-                  Findings:{" "}
-                  {analysisResult.detection?.total_findings || 0}
-                  {" | "}
-                  Anomalies:{" "}
-                  {analysisResult.anomaly_detection?.anomaly_count ||
-                    0}
+                  Current investigation: <strong>{investigation.name}</strong>
+                  {" · "}
+                  {investigationId}
                 </p>
               )}
             </section>
@@ -496,78 +684,99 @@ function App() {
               ))}
             </section>
 
-            {/* RECENT ACTIVITY */}
+            {investigationsError && (
+              <p className="management-message error-message" role="alert">
+                {investigationsError}
+                {" "}
+                <button
+                  className="text-button"
+                  onClick={refreshInvestigations}
+                >
+                  Retry
+                </button>
+              </p>
+            )}
+
+            {/* RECENT INVESTIGATIONS */}
             <section className="activity-section">
               <div className="section-heading">
                 <div>
-                  <h2>Recent Activity</h2>
-
-                  <p>
-                    Latest updates across your investigations
-                  </p>
+                  <h2>Recent Investigations</h2>
+                  <p>Recently updated cases in this workspace.</p>
                 </div>
-
-                <button className="text-button">
-                  View all
+                <button
+                  className="text-button"
+                  onClick={() => setActivePage("Investigations")}
+                >
+                  View all investigations
                 </button>
               </div>
 
               <div className="activity-card">
-                {activities.map((activity) => (
+                {investigationsLoading ? (
+                  <p className="management-state">
+                    Loading recent investigations...
+                  </p>
+                ) : recentInvestigations.length ? (
+                  recentInvestigations.map((item) => (
                   <div
                     className="activity-item"
-                    key={activity.title}
+                    key={item.investigation_id}
                   >
-                    <span
-                      className={`activity-marker ${activity.color}`}
-                    ></span>
-
                     <div className="activity-details">
-                      <strong>{activity.title}</strong>
-                      <p>{activity.detail}</p>
+                      <strong>{item.name}</strong>
+                      <p>
+                        {item.investigation_id}
+                        {" · "}
+                        {item.evidence_file_count} evidence files
+                        {" · "}
+                        {item.total_findings} findings
+                      </p>
                     </div>
-
                     <span className="activity-time">
-                      {activity.time}
+                      {formatDate(item.updated_at)}
                     </span>
+                    <span className="status-pill">{item.status}</span>
+                    <button
+                      className="secondary-button"
+                      onClick={() => openInvestigation(item.investigation_id)}
+                    >
+                      Open
+                    </button>
                   </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="management-state">
+                    No investigations yet. Create one to begin.
+                  </p>
+                )}
               </div>
             </section>
 
-            {/* BOTTOM DASHBOARD CARDS */}
+            {/* DASHBOARD SHORTCUTS */}
             <section className="bottom-grid">
               <div className="information-card">
-                <h3>Investigation Status</h3>
-
-                <p>Overview of current case progress</p>
-
-                <div className="progress-row">
-                  <span>Under Investigation</span>
-                  <strong>2 cases</strong>
-                </div>
-
-                <div className="progress-track">
-                  <div className="progress-fill first"></div>
-                </div>
-
-                <div className="progress-row">
-                  <span>Review Pending</span>
-                  <strong>1 case</strong>
-                </div>
-
-                <div className="progress-track">
-                  <div className="progress-fill second"></div>
-                </div>
-
-                <div className="progress-row">
-                  <span>Completed</span>
-                  <strong>1 case</strong>
-                </div>
-
-                <div className="progress-track">
-                  <div className="progress-fill third"></div>
-                </div>
+                <h3>Selected Investigation</h3>
+                {investigation ? (
+                  <>
+                    <p>
+                      {investigation.name} · {investigation.investigation_id}
+                    </p>
+                    <p>
+                      {analysisResult?.evidence_records?.length ?? 0} records
+                      {" · "}
+                      {analysisResult?.detection?.total_findings ?? 0} findings
+                    </p>
+                    <button
+                      className="text-button"
+                      onClick={() => setActivePage("Investigation Workspace")}
+                    >
+                      Open workspace
+                    </button>
+                  </>
+                ) : (
+                  <p>Select an investigation to see its current analysis.</p>
+                )}
               </div>
 
               <div className="information-card quick-card">
@@ -603,6 +812,28 @@ function App() {
               </div>
             </section>
           </>
+        ) : activePage === "Investigations" ? (
+          <InvestigationList
+            investigations={investigations}
+            loading={investigationsLoading}
+            error={investigationsError}
+            onRetry={refreshInvestigations}
+            onOpen={openInvestigation}
+            onCreate={() => setShowCreateModal(true)}
+          />
+        ) : activePage === "Investigation Workspace" ? (
+          <InvestigationWorkspace
+            investigation={investigation}
+            analysis={analysisResult}
+            summary={investigationSummary}
+            findings={findingsData}
+            anomalies={anomaliesData}
+            loading={workspaceLoading}
+            error={workspaceError}
+            notice={workspaceNotice}
+            uploading={workspaceUploading}
+            onUpload={handleAddEvidence}
+          />
         ) : activePage === "Evidence Explorer" ? (
           /* EVIDENCE EXPLORER */
           <section className="evidence-page">
@@ -1518,6 +1749,12 @@ function App() {
           Tattva Forensics · AI-Assisted Digital Evidence Correlation
         </footer>
       </main>
+      {showCreateModal && (
+        <CreateInvestigationModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={handleInvestigationCreated}
+        />
+      )}
     </div>
   );
 }
