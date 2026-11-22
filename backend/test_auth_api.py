@@ -79,6 +79,39 @@ def _login(app, username, password):
     return client, response
 
 
+def _create_active_assigned_user(
+    app,
+    admin_client,
+    investigation_id,
+    username,
+    role="INVESTIGATOR",
+):
+    initial_password = "Temporary-password-123"
+    changed_password = "Changed-password-123"
+    user = _create_user(admin_client, username, initial_password, role)
+    assignment = admin_client.post(
+        f"/investigations/{investigation_id}/assignments",
+        json={"user_id": user["user_id"]},
+    )
+    assert assignment.status_code == 201
+
+    initial_client, response = _login(app, username, initial_password)
+    assert response.status_code == 200
+    change = initial_client.post(
+        "/auth/password",
+        json={
+            "current_password": initial_password,
+            "new_password": changed_password,
+        },
+    )
+    assert change.status_code == 204
+    assert initial_client.get("/auth/me").status_code == 401
+
+    active_client, response = _login(app, username, changed_password)
+    assert response.status_code == 200
+    return user, assignment.json()["assignment_id"], active_client
+
+
 def test_login_uses_secure_cookie_and_stores_only_token_hash(auth_system):
     app, store, admin, client = auth_system
     csrf = client.get("/auth/csrf")
@@ -185,6 +218,204 @@ def test_session_expiration_logout_and_immediate_revocation(auth_system):
     assert client.get("/auth/me").status_code == 401
     session = store.get_session_by_token(session_cookie)
     assert session["revoked_at"] is not None
+
+
+def test_password_change_revokes_all_existing_sessions(auth_system):
+    app, _, _, admin_client = auth_system
+    investigation_id = _create_investigation(admin_client)
+    username = "password-revocation@example.test"
+    _, _, first_client = _create_active_assigned_user(
+        app,
+        admin_client,
+        investigation_id,
+        username,
+    )
+    second_client, response = _login(
+        app,
+        username,
+        "Changed-password-123",
+    )
+    assert response.status_code == 200
+    assert first_client.get(
+        f"/investigations/{investigation_id}"
+    ).status_code == 200
+    assert second_client.get(
+        f"/investigations/{investigation_id}"
+    ).status_code == 200
+
+    changed = second_client.post(
+        "/auth/password",
+        json={
+            "current_password": "Changed-password-123",
+            "new_password": "Final-password-123",
+        },
+    )
+    assert changed.status_code == 204
+    assert first_client.get(
+        f"/investigations/{investigation_id}"
+    ).status_code == 401
+    assert second_client.get(
+        f"/investigations/{investigation_id}"
+    ).status_code == 401
+
+    replacement, response = _login(
+        app,
+        username,
+        "Final-password-123",
+    )
+    assert response.status_code == 200
+    assert replacement.get(
+        f"/investigations/{investigation_id}"
+    ).status_code == 200
+
+
+def test_deactivation_rejects_an_existing_session(auth_system):
+    app, _, _, admin_client = auth_system
+    investigation_id = _create_investigation(admin_client)
+    user, _, active_client = _create_active_assigned_user(
+        app,
+        admin_client,
+        investigation_id,
+        "deactivation-session@example.test",
+    )
+    assert active_client.get(
+        f"/investigations/{investigation_id}"
+    ).status_code == 200
+
+    deactivated = admin_client.patch(
+        f"/users/{user['user_id']}",
+        json={"is_active": False},
+    )
+    assert deactivated.status_code == 200
+    assert active_client.get(
+        f"/investigations/{investigation_id}"
+    ).status_code == 401
+
+
+def test_role_changes_apply_to_an_existing_session(auth_system):
+    app, _, _, admin_client = auth_system
+    investigation_id = _create_investigation(admin_client)
+    user, _, active_client = _create_active_assigned_user(
+        app,
+        admin_client,
+        investigation_id,
+        "role-session@example.test",
+        role="VIEWER",
+    )
+    upload = {
+        "files": {
+            "file": (
+                "role-change.log",
+                b"2026-11-09 09:00:00 LOGIN_FAILED user01 192.168.1.10\n",
+                "text/plain",
+            )
+        },
+        "data": {"source_type": "authentication"},
+    }
+
+    denied = active_client.post(
+        f"/investigations/{investigation_id}/evidence",
+        **upload,
+    )
+    assert denied.status_code == 403
+
+    promoted = admin_client.patch(
+        f"/users/{user['user_id']}",
+        json={"role": "INVESTIGATOR"},
+    )
+    assert promoted.status_code == 200
+    assert active_client.post(
+        f"/investigations/{investigation_id}/evidence",
+        **upload,
+    ).status_code == 200
+
+    demoted = admin_client.patch(
+        f"/users/{user['user_id']}",
+        json={"role": "VIEWER"},
+    )
+    assert demoted.status_code == 200
+    assert active_client.post(
+        f"/investigations/{investigation_id}/evidence",
+        **upload,
+    ).status_code == 403
+
+
+def test_assignment_revocation_denies_an_existing_session(auth_system):
+    app, _, _, admin_client = auth_system
+    investigation_id = _create_investigation(admin_client)
+    _, assignment_id, active_client = _create_active_assigned_user(
+        app,
+        admin_client,
+        investigation_id,
+        "assignment-session@example.test",
+    )
+    assert active_client.get(
+        f"/investigations/{investigation_id}"
+    ).status_code == 200
+
+    revoked = admin_client.delete(
+        f"/investigations/{investigation_id}/assignments/{assignment_id}"
+    )
+    assert revoked.status_code == 204
+    assert active_client.get(
+        f"/investigations/{investigation_id}"
+    ).status_code == 404
+
+
+def test_logout_preserves_other_sessions_until_password_change(auth_system):
+    app, _, _, admin_client = auth_system
+    investigation_id = _create_investigation(admin_client)
+    username = "multiple-sessions@example.test"
+    _, _, logout_client = _create_active_assigned_user(
+        app,
+        admin_client,
+        investigation_id,
+        username,
+    )
+    remaining_client, response = _login(
+        app,
+        username,
+        "Changed-password-123",
+    )
+    assert response.status_code == 200
+    other_client, response = _login(
+        app,
+        username,
+        "Changed-password-123",
+    )
+    assert response.status_code == 200
+
+    assert logout_client.post("/auth/logout").status_code == 204
+    assert logout_client.get("/auth/me").status_code == 401
+    assert remaining_client.get(
+        f"/investigations/{investigation_id}"
+    ).status_code == 200
+    assert other_client.get(
+        f"/investigations/{investigation_id}"
+    ).status_code == 200
+
+    changed = remaining_client.post(
+        "/auth/password",
+        json={
+            "current_password": "Changed-password-123",
+            "new_password": "Final-password-123",
+        },
+    )
+    assert changed.status_code == 204
+    assert remaining_client.get("/auth/me").status_code == 401
+    assert other_client.get(
+        f"/investigations/{investigation_id}"
+    ).status_code == 401
+
+    replacement, response = _login(
+        app,
+        username,
+        "Final-password-123",
+    )
+    assert response.status_code == 200
+    assert replacement.get(
+        f"/investigations/{investigation_id}"
+    ).status_code == 200
 
 
 def test_authentication_required_for_investigation_and_simulator_routes(
