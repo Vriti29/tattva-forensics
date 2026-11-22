@@ -2,7 +2,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.api.main import app
+from backend.api.main import app, create_app
 from backend.ingestion.auth_parser import parse_auth_log
 from backend.ingestion.file_parser import parse_file_log
 from backend.ingestion.network_parser import parse_network_log
@@ -227,3 +227,198 @@ def test_investigation_graph(uploaded_investigation):
 def test_unknown_investigation():
     response = client.get("/investigations/INV-INVALID/summary")
     assert response.status_code == 404
+
+
+def test_create_list_retrieve_and_update_investigation(tmp_path):
+    test_client = TestClient(create_app(tmp_path))
+
+    created = test_client.post(
+        "/investigations",
+        json={"name": "Incident 42", "description": "Initial description"}
+    )
+    assert created.status_code == 201
+    investigation = created.json()
+    investigation_id = investigation["investigation_id"]
+    assert investigation["name"] == "Incident 42"
+    assert investigation["status"] == "open"
+
+    listed = test_client.get("/investigations")
+    assert listed.status_code == 200
+    assert listed.json()[0]["investigation_id"] == investigation_id
+
+    retrieved = test_client.get(f"/investigations/{investigation_id}")
+    assert retrieved.status_code == 200
+    assert retrieved.json()["description"] == "Initial description"
+
+    updated = test_client.patch(
+        f"/investigations/{investigation_id}",
+        json={"name": "Incident 42 - reviewed", "status": "in_progress"}
+    )
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "Incident 42 - reviewed"
+    assert updated.json()["status"] == "in_progress"
+
+
+def test_multiple_uploads_are_combined_and_keep_file_metadata(tmp_path):
+    test_client = TestClient(create_app(tmp_path))
+    created = test_client.post(
+        "/investigations",
+        json={"name": "Combined evidence case"}
+    )
+    investigation_id = created.json()["investigation_id"]
+
+    first_content = (
+        b"2026-11-09 09:00:00 LOGIN_FAILED user01 192.168.1.10\n"
+        b"2026-11-09 09:01:00 LOGIN_FAILED user01 192.168.1.10\n"
+    )
+    second_content = (
+        b"2026-11-09 09:02:00 LOGIN_FAILED user01 192.168.1.10\n"
+    )
+    for filename, content in (
+        ("auth-first.log", first_content),
+        ("auth-second.log", second_content),
+    ):
+        response = test_client.post(
+            f"/investigations/{investigation_id}/evidence",
+            files={"file": (filename, content, "text/plain")},
+            data={"source_type": "authentication"},
+        )
+        assert response.status_code == 200
+        assert response.json()["investigation_id"] == investigation_id
+
+    detail = test_client.get(f"/investigations/{investigation_id}").json()
+    records = detail["analysis"]["evidence_records"]
+    assert len(records) == 3
+    assert len({record["evidence_id"] for record in records}) == 3
+    assert len({record["source_id"] for record in records}) == 2
+    assert any(
+        finding["rule_id"] == "R01"
+        for finding in detail["analysis"]["detection"]["findings"]
+    )
+    assert [item["filename"] for item in detail["evidence_files"]] == [
+        "auth-first.log",
+        "auth-second.log",
+    ]
+    for item in detail["evidence_files"]:
+        evidence_path = Path(item["file_path"])
+        assert evidence_path.is_file()
+        assert evidence_path.name != item["filename"]
+        assert len(item["sha256"]) == 64
+
+    summary = test_client.get(
+        f"/investigations/{investigation_id}/summary"
+    ).json()
+    assert summary["total_evidence"] == 3
+    assert test_client.get("/investigations").json()[0][
+        "evidence_file_count"
+    ] == 2
+
+
+def test_investigations_and_evidence_survive_app_reinitialization(tmp_path):
+    first_client = TestClient(create_app(tmp_path))
+    created = first_client.post(
+        "/investigations",
+        json={"name": "Persistent case"}
+    ).json()
+    investigation_id = created["investigation_id"]
+    upload = first_client.post(
+        f"/investigations/{investigation_id}/evidence",
+        files={
+            "file": (
+                "persistent.log",
+                b"2026-11-09 09:00:00 LOGIN_SUCCESS user02 192.168.1.15\n",
+                "text/plain",
+            )
+        },
+        data={"source_type": "authentication"},
+    )
+    assert upload.status_code == 200
+    baseline_analysis_id = upload.json()["baseline_analysis_id"]
+
+    restored_app = create_app(tmp_path)
+    restored_client = TestClient(restored_app)
+    restored = restored_client.get(
+        f"/investigations/{investigation_id}"
+    )
+    assert restored.status_code == 200
+    assert restored.json()["analysis"]["evidence_records"]
+    assert restored_client.get(
+        f"/investigations/{investigation_id}/summary"
+    ).status_code == 200
+    assert restored_client.get(
+        f"/investigations/{investigation_id}/findings"
+    ).status_code == 200
+    assert restored_app.state.simulation_evidence_store[investigation_id]
+    assert baseline_analysis_id in restored_app.state.baseline_analysis_store
+
+
+def test_analyze_response_remains_compatible_and_file_is_durable():
+    path = DATA / "authentication" / "sample.log"
+    with path.open("rb") as file:
+        response = client.post(
+            "/analyze",
+            files={"file": ("original-auth-name.log", file, "text/plain")},
+            data={"source_type": "authentication"}
+        )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert set(result) == {
+        "source_id",
+        "metadata",
+        "ingestion",
+        "normalization",
+        "evidence_records",
+        "detection",
+        "anomaly_detection",
+        "correlation",
+        "investigation_id",
+        "baseline_analysis_id",
+    }
+    assert result["metadata"]["filename"] == "original-auth-name.log"
+    assert Path(result["metadata"]["file_path"]).is_file()
+    assert result["evidence_records"][0]["evidence_id"] == "EV-0001"
+
+
+def test_simulator_uses_persisted_investigation_evidence():
+    created = client.post(
+        "/investigations",
+        json={"name": "Simulator integration"}
+    ).json()
+    investigation_id = created["investigation_id"]
+    upload = client.post(
+        f"/investigations/{investigation_id}/evidence",
+        files={
+            "file": (
+                "simulator.log",
+                b"2026-11-09 09:00:00 LOGIN_SUCCESS user01 192.168.1.10\n"
+                b"2026-11-09 09:01:00 LOGIN_FAILED user02 192.168.1.15\n",
+                "text/plain",
+            )
+        },
+        data={"source_type": "authentication"},
+    )
+    assert upload.status_code == 200
+    analysis = upload.json()["analysis"]
+
+    scenario = client.post(
+        "/api/simulations",
+        json={
+            "investigation_id": investigation_id,
+            "baseline_analysis_id": analysis["baseline_analysis_id"],
+            "scenario_name": "Exclude one record",
+            "description": "Simulator integration test",
+        },
+    )
+    assert scenario.status_code == 201
+    scenario_id = scenario.json()["scenario_id"]
+    excluded = client.post(
+        f"/api/simulations/{scenario_id}/exclude",
+        json={
+            "evidence_id": analysis["evidence_records"][0]["evidence_id"]
+        },
+    )
+    assert excluded.status_code == 200
+    run = client.post(f"/api/simulations/{scenario_id}/run")
+    assert run.status_code == 200
+    assert run.json()["result"]["status"] == "COMPLETED"
