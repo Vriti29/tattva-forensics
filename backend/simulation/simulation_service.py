@@ -48,7 +48,8 @@ class SimulationService:
         baseline_analysis_id,
         scenario_name,
         description,
-        evidence_ids
+        evidence_ids,
+        actor_user_id=None,
     ):
 
         scenario = self.scenario_manager.create_scenario(
@@ -61,7 +62,8 @@ class SimulationService:
 
         self.audit_manager.log_action(
             scenario.scenario_id,
-            "SCENARIO_CREATED"
+            "SCENARIO_CREATED",
+            actor_user_id=actor_user_id,
         )
 
         return scenario
@@ -70,7 +72,7 @@ class SimulationService:
     # EXCLUDE EVENT
     # ---------------------------------
 
-    def exclude_event(self, scenario_id, evidence_id):
+    def exclude_event(self, scenario_id, evidence_id, actor_user_id=None):
 
         operation = self.operation_manager.exclude_event(
             scenario_id,
@@ -80,7 +82,8 @@ class SimulationService:
         self.audit_manager.log_action(
             scenario_id,
             "EVENT_EXCLUDED",
-            evidence_id
+            evidence_id,
+            actor_user_id=actor_user_id,
         )
 
         return operation
@@ -94,7 +97,8 @@ class SimulationService:
         scenario_id,
         evidence_id,
         original_value,
-        simulated_value
+        simulated_value,
+        actor_user_id=None,
     ):
 
         operation = self.operation_manager.modify_timestamp(
@@ -111,7 +115,8 @@ class SimulationService:
             {
                 "original_value": original_value,
                 "simulated_value": simulated_value
-            }
+            },
+            actor_user_id=actor_user_id,
         )
 
         return operation
@@ -124,7 +129,8 @@ class SimulationService:
         self,
         scenario_id,
         original_records,
-        baseline_analysis
+        baseline_analysis,
+        actor_user_id=None,
     ):
 
         scenario = self.scenario_manager.get_scenario(
@@ -154,7 +160,8 @@ class SimulationService:
 
         self.audit_manager.log_action(
             scenario_id,
-            "SIMULATION_EXECUTED"
+            "SIMULATION_EXECUTED",
+            actor_user_id=actor_user_id,
         )
 
         return result
@@ -166,7 +173,8 @@ class SimulationService:
     def compare_results(
         self,
         scenario_id,
-        baseline_analysis
+        baseline_analysis,
+        actor_user_id=None,
     ):
 
         if scenario_id not in self.simulation_results:
@@ -184,7 +192,8 @@ class SimulationService:
 
         self.audit_manager.log_action(
             scenario_id,
-            "COMPARISON_GENERATED"
+            "COMPARISON_GENERATED",
+            actor_user_id=actor_user_id,
         )
 
         return comparison
@@ -193,7 +202,7 @@ class SimulationService:
     # RESET
     # ---------------------------------
 
-    def reset_scenario(self, scenario_id):
+    def reset_scenario(self, scenario_id, actor_user_id=None):
 
         scenario = self.scenario_manager.reset_scenario(
             scenario_id
@@ -205,7 +214,8 @@ class SimulationService:
 
         self.audit_manager.log_action(
             scenario_id,
-            "SCENARIO_RESET"
+            "SCENARIO_RESET",
+            actor_user_id=actor_user_id,
         )
 
         return scenario
@@ -214,7 +224,7 @@ class SimulationService:
     # DISCARD
     # ---------------------------------
 
-    def discard_scenario(self, scenario_id):
+    def discard_scenario(self, scenario_id, actor_user_id=None):
 
         scenario = self.scenario_manager.discard_scenario(
             scenario_id
@@ -222,7 +232,8 @@ class SimulationService:
 
         self.audit_manager.log_action(
             scenario_id,
-            "SCENARIO_DISCARDED"
+            "SCENARIO_DISCARDED",
+            actor_user_id=actor_user_id,
         )
 
         return scenario

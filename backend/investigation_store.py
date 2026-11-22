@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import json
@@ -64,6 +64,7 @@ class InvestigationStore:
                 migrations = (
                     (1, "investigation_storage", self._migration_1),
                     (2, "identity_and_audit_foundation", self._migration_2),
+                    (3, "login_attempt_rate_limits", self._migration_3),
                 )
                 applied_versions = {
                     row["version"]
@@ -253,6 +254,28 @@ class InvestigationStore:
                     REFERENCES users(user_id)
                 """
             )
+
+    @staticmethod
+    def _migration_3(connection):
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS login_attempt_buckets (
+                scope TEXT NOT NULL CHECK (
+                    scope IN ('account_source', 'source')
+                ),
+                bucket_hash TEXT NOT NULL,
+                attempt_count INTEGER NOT NULL CHECK (attempt_count > 0),
+                window_started_at TEXT NOT NULL,
+                PRIMARY KEY (scope, bucket_hash)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS login_attempt_buckets_window_idx
+            ON login_attempt_buckets(window_started_at)
+            """
+        )
 
     @staticmethod
     def _decode(value):
@@ -636,6 +659,129 @@ class InvestigationStore:
             "user": self._user_from_row(row),
             "password_hash": row["password_hash"],
         }
+
+    def begin_login_attempt(self, username, source, now=None):
+        normalized_username = username.strip().casefold()
+        source = source or "unknown"
+        now = now or datetime.now(timezone.utc)
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        now = now.astimezone(timezone.utc)
+
+        window_seconds = 15 * 60
+        account_limit = 5
+        source_limit = 20
+        window_start = now.isoformat()
+        bucket_keys = (
+            (
+                "account_source",
+                hashlib.sha256(
+                    f"{normalized_username}\0{source}".encode("utf-8")
+                ).hexdigest(),
+                account_limit,
+            ),
+            (
+                "source",
+                hashlib.sha256(source.encode("utf-8")).hexdigest(),
+                source_limit,
+            ),
+        )
+
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                cutoff = (
+                    now - timedelta(seconds=window_seconds)
+                ).isoformat()
+                connection.execute(
+                    """
+                    DELETE FROM login_attempt_buckets
+                    WHERE window_started_at <= ?
+                    """,
+                    (cutoff,),
+                )
+                retry_after = 0
+                updated = []
+                for scope, bucket_hash, limit in bucket_keys:
+                    row = connection.execute(
+                        """
+                        SELECT attempt_count, window_started_at
+                        FROM login_attempt_buckets
+                        WHERE scope = ? AND bucket_hash = ?
+                        """,
+                        (scope, bucket_hash),
+                    ).fetchone()
+                    if row is not None:
+                        bucket_started = datetime.fromisoformat(
+                            row["window_started_at"]
+                        )
+                        if bucket_started.tzinfo is None:
+                            bucket_started = bucket_started.replace(
+                                tzinfo=timezone.utc
+                            )
+                        expires_at = bucket_started + timedelta(
+                            seconds=window_seconds
+                        )
+                        if expires_at <= now:
+                            connection.execute(
+                                """
+                                DELETE FROM login_attempt_buckets
+                                WHERE scope = ? AND bucket_hash = ?
+                                """,
+                                (scope, bucket_hash),
+                            )
+                            row = None
+                        elif row["attempt_count"] >= limit:
+                            retry_after = max(
+                                retry_after,
+                                int((expires_at - now).total_seconds()) + 1,
+                            )
+                    updated.append((scope, bucket_hash, row))
+
+                if retry_after:
+                    connection.commit()
+                    return retry_after
+
+                for scope, bucket_hash, row in updated:
+                    if row is None:
+                        connection.execute(
+                            """
+                            INSERT INTO login_attempt_buckets (
+                                scope, bucket_hash, attempt_count,
+                                window_started_at
+                            ) VALUES (?, ?, 1, ?)
+                            """,
+                            (scope, bucket_hash, window_start),
+                        )
+                    else:
+                        connection.execute(
+                            """
+                            UPDATE login_attempt_buckets
+                            SET attempt_count = attempt_count + 1
+                            WHERE scope = ? AND bucket_hash = ?
+                            """,
+                            (scope, bucket_hash),
+                        )
+                connection.commit()
+                return None
+            except Exception:
+                connection.rollback()
+                raise
+
+    def clear_login_attempts(self, username, source):
+        source = source or "unknown"
+        bucket_hash = hashlib.sha256(
+            f"{username.strip().casefold()}\0{source}".encode("utf-8")
+        ).hexdigest()
+        with closing(self._connect()) as connection:
+            with connection:
+                connection.execute(
+                    """
+                    DELETE FROM login_attempt_buckets
+                    WHERE scope = 'account_source' AND bucket_hash = ?
+                    """,
+                    (bucket_hash,),
+                )
 
     def list_users(self):
         with closing(self._connect()) as connection:

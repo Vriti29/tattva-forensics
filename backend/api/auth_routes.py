@@ -96,6 +96,15 @@ def get_csrf_token(request: Request, response: Response):
 @router.post("/auth/login")
 def login(data: LoginRequest, request: Request, response: Response):
     store = request.app.state.investigation_store
+    source = request.client.host if request.client is not None else "unknown"
+    retry_after = store.begin_login_attempt(data.username, source)
+    if retry_after is not None:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many login attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     try:
         auth_record = store.get_user_auth_record(data.username)
     except ValueError:
@@ -139,6 +148,7 @@ def login(data: LoginRequest, request: Request, response: Response):
             status_code=401,
             detail="Invalid username or password",
         ) from error
+    store.clear_login_attempts(data.username, source)
     csrf_token = issue_csrf_token()
     set_session_cookie(
         response,

@@ -111,6 +111,24 @@ def get_scenario_or_404(service, scenario_id):
         )
 
 
+def _record_simulation_audit(
+    request,
+    user,
+    scenario,
+    action,
+    evidence_id=None,
+    details=None,
+):
+    request.app.state.investigation_store.append_audit_event(
+        action=f"SIMULATOR_{action}",
+        actor_user_id=user["user_id"],
+        investigation_id=scenario.investigation_id,
+        evidence_id=evidence_id,
+        target_id=scenario.scenario_id,
+        metadata=details or {},
+    )
+
+
 # ==========================================
 # 1. CREATE SCENARIO
 # ==========================================
@@ -176,7 +194,18 @@ def create_scenario(
             data.baseline_analysis_id,
             data.scenario_name,
             data.description,
-            evidence_ids
+            evidence_ids,
+            actor_user_id=user["user_id"],
+        )
+        _record_simulation_audit(
+            request,
+            user,
+            scenario,
+            "SCENARIO_CREATED",
+            details={
+                "baseline_analysis_id": scenario.baseline_analysis_id,
+                "scenario_name": scenario.scenario_name,
+            },
         )
 
         return scenario.model_dump(mode="json")
@@ -285,7 +314,15 @@ def exclude_event(
 
         result = service.exclude_event(
             scenario_id,
-            data.evidence_id
+            data.evidence_id,
+            actor_user_id=user["user_id"],
+        )
+        _record_simulation_audit(
+            request,
+            user,
+            scenario,
+            "EVENT_EXCLUDED",
+            evidence_id=data.evidence_id,
         )
 
         return {
@@ -329,7 +366,19 @@ def modify_timestamp(
             scenario_id,
             data.evidence_id,
             data.original_value.isoformat(),
-            data.simulated_value.isoformat()
+            data.simulated_value.isoformat(),
+            actor_user_id=user["user_id"],
+        )
+        _record_simulation_audit(
+            request,
+            user,
+            scenario,
+            "TIMESTAMP_MODIFIED",
+            evidence_id=data.evidence_id,
+            details={
+                "original_value": data.original_value.isoformat(),
+                "simulated_value": data.simulated_value.isoformat(),
+            },
         )
 
         return {
@@ -392,7 +441,14 @@ def run_simulation(
         result = service.run_simulation(
             scenario_id,
             evidence_store[scenario.investigation_id],
-            baseline_store[scenario.baseline_analysis_id]
+            baseline_store[scenario.baseline_analysis_id],
+            actor_user_id=user["user_id"],
+        )
+        _record_simulation_audit(
+            request,
+            user,
+            scenario,
+            "SIMULATION_EXECUTED",
         )
 
         return {
@@ -446,10 +502,18 @@ def compare_results(
 
     try:
 
-        return service.compare_results(
+        result = service.compare_results(
             scenario_id,
-            baseline
+            baseline,
+            actor_user_id=user["user_id"],
         )
+        _record_simulation_audit(
+            request,
+            user,
+            scenario,
+            "COMPARISON_GENERATED",
+        )
+        return result
 
     except ValueError as error:
 
@@ -512,7 +576,16 @@ def reset_scenario(
 
     try:
 
-        result = service.reset_scenario(scenario_id)
+        result = service.reset_scenario(
+            scenario_id,
+            actor_user_id=user["user_id"],
+        )
+        _record_simulation_audit(
+            request,
+            user,
+            scenario,
+            "SCENARIO_RESET",
+        )
 
         return {
             "message": "Scenario reset successfully",
@@ -550,7 +623,16 @@ def discard_scenario(
 
     try:
 
-        result = service.discard_scenario(scenario_id)
+        result = service.discard_scenario(
+            scenario_id,
+            actor_user_id=user["user_id"],
+        )
+        _record_simulation_audit(
+            request,
+            user,
+            scenario,
+            "SCENARIO_DISCARDED",
+        )
 
         return {
             "message": "Scenario discarded successfully",

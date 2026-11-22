@@ -127,7 +127,7 @@ def test_legacy_database_migration_preserves_records(tmp_path):
         connection.close()
 
     assert uploader == (None,)
-    assert versions == [(1,), (2,)]
+    assert versions == [(1,), (2,), (3,)]
     assert store.get_investigation("INV-LEGACY-1")["baseline_analysis_id"] == (
         "BASELINE-1"
     )
@@ -151,7 +151,7 @@ def test_migration_of_copy_of_repository_database_preserves_records(tmp_path):
     try:
         assert connection.execute(
             "SELECT COUNT(*) FROM schema_migrations"
-        ).fetchone()[0] == 2
+        ).fetchone()[0] == 3
         assert connection.execute(
             """
             SELECT COUNT(*) FROM evidence_files
@@ -169,7 +169,7 @@ def test_migrations_are_repeatable(tmp_path):
     with sqlite3.connect(store.database_path) as connection:
         assert connection.execute(
             "SELECT version FROM schema_migrations ORDER BY version"
-        ).fetchall() == [(1,), (2,)]
+        ).fetchall() == [(1,), (2,), (3,)]
 
 
 def test_user_creation_normalization_and_role_validation(tmp_path):

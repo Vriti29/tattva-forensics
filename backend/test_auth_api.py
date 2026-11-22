@@ -141,6 +141,28 @@ def test_invalid_and_inactive_credentials_are_rejected(auth_system):
     assert response.json()["detail"] == "Invalid username or password"
 
 
+def test_login_rate_limit_blocks_repeated_password_guesses(auth_system):
+    app, _, _, _ = auth_system
+    client, _ = _client_for(app)
+
+    for _ in range(5):
+        response = client.post(
+            "/auth/login",
+            json={"username": ADMIN_USERNAME, "password": "wrong-password"},
+        )
+        assert response.status_code == 401
+
+    blocked = client.post(
+        "/auth/login",
+        json={"username": ADMIN_USERNAME, "password": ADMIN_PASSWORD},
+    )
+    assert blocked.status_code == 429
+    assert blocked.headers["retry-after"].isdigit()
+    assert blocked.json()["detail"] == (
+        "Too many login attempts. Try again later."
+    )
+
+
 def test_session_expiration_logout_and_immediate_revocation(auth_system):
     app, store, admin, client = auth_system
     expired_token = "expired-test-token"
@@ -519,7 +541,7 @@ def test_csrf_cors_and_legacy_analyze_compatibility(auth_system):
 
 
 def test_simulator_authorization_for_assigned_investigator_and_viewer(auth_system):
-    app, _, _, admin_client = auth_system
+    app, store, _, admin_client = auth_system
     investigation_id = _create_investigation(admin_client, "Simulator case")
     unassigned_id = _create_investigation(admin_client, "Unassigned simulator")
     upload = admin_client.post(
@@ -599,18 +621,40 @@ def test_simulator_authorization_for_assigned_investigator_and_viewer(auth_syste
             "investigation_id": investigation_id,
             "baseline_analysis_id": analysis["baseline_analysis_id"],
             "scenario_name": "Authorized scenario",
+            "actor_user_id": "forged-user-id",
         },
     )
     assert scenario.status_code == 201
     scenario_id = scenario.json()["scenario_id"]
-    assert investigator_client.get(
-        f"/api/simulations/{scenario_id}"
-    ).status_code == 200
     assert investigator_client.post(
         f"/api/simulations/{scenario_id}/exclude",
         json={
             "evidence_id": analysis["evidence_records"][0]["evidence_id"]
         },
+    ).status_code == 200
+    scenario_history = investigator_client.get(
+        f"/api/simulations/{scenario_id}/history"
+    )
+    assert scenario_history.status_code == 200
+    actor_user_id = investigator_client.get("/auth/me").json()["user_id"]
+    assert {
+        item["actor_user_id"] for item in scenario_history.json()
+    } == {actor_user_id}
+    audit_events = store.list_audit_events(investigation_id)
+    assert any(
+        event["action"] == "SIMULATOR_EVENT_EXCLUDED"
+        and event["actor_user_id"] == actor_user_id
+        and event["target_id"] == scenario_id
+        for event in audit_events
+    )
+    assert any(
+        event["action"] == "SIMULATOR_SCENARIO_CREATED"
+        and event["actor_user_id"] == actor_user_id
+        and event["target_id"] == scenario_id
+        for event in audit_events
+    )
+    assert investigator_client.get(
+        f"/api/simulations/{scenario_id}"
     ).status_code == 200
     assert investigator_client.post(
         f"/api/simulations/{scenario_id}/run"

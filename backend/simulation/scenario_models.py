@@ -143,6 +143,8 @@ class AuditRecord(BaseModel):
 
     action: str
 
+    actor_user_id: Optional[str] = None
+
     evidence_id: Optional[str] = None
 
     details: dict[str, Any] = Field(
