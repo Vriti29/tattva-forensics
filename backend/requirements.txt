@@ -1,0 +1,8 @@
+argon2-cffi>=23.1.0,<26
+fastapi>=0.110,<1
+networkx>=3.2,<4
+numpy>=1.26,<3
+pandas>=2.1,<4
+python-multipart>=0.0.9
+scikit-learn>=1.4,<2
+uvicorn>=0.27,<1
