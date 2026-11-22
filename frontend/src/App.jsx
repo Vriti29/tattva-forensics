@@ -2,20 +2,38 @@ import { useCallback, useEffect, useState } from "react";
 import {
   CreateInvestigationModal,
   InvestigationList,
-  InvestigationWorkspace,
 } from "./InvestigationManagement.jsx";
 import { formatDate, requestJson } from "./investigationApi.js";
 import "./App.css";
 
+const menuItems = [
+  { label: "Dashboard", icon: "▦" },
+  { label: "Evidence Explorer", icon: "▣" },
+  { label: "Incident Timeline", icon: "◷" },
+  { label: "Evidence Graph", icon: "◎" },
+  { label: "What-If Simulator", icon: "⇄" },
+  { label: "Reports", icon: "▤" },
+  { label: "Investigations", icon: "⌕" },
+];
+
+const pageNames = menuItems.map((item) => item.label);
+
+function getInitialPage() {
+  try {
+    const storedPage = window.localStorage.getItem("tattva:active-page");
+    return pageNames.includes(storedPage) ? storedPage : "Dashboard";
+  } catch {
+    return "Dashboard";
+  }
+}
+
 function App() {
-  const [activePage, setActivePage] = useState("Dashboard");
+  const [activePage, setActivePage] = useState(getInitialPage);
   const [selectedEvidence, setSelectedEvidence] = useState(null);
   const [evidenceRecords, setEvidenceRecords] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [evidenceInputKey, setEvidenceInputKey] = useState(0);
   const [sourceType, setSourceType] = useState("authentication");
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
-  const [uploadSuccess, setUploadSuccess] = useState("");
   const [investigationId, setInvestigationId] = useState(() => {
     try {
       return window.localStorage.getItem("tattva:selected-investigation") || "";
@@ -27,10 +45,12 @@ function App() {
   const [investigations, setInvestigations] = useState([]);
   const [investigationsLoading, setInvestigationsLoading] = useState(false);
   const [investigationsError, setInvestigationsError] = useState("");
-  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceLoading, setWorkspaceLoading] = useState(
+    () => Boolean(investigationId)
+  );
   const [workspaceError, setWorkspaceError] = useState("");
   const [workspaceNotice, setWorkspaceNotice] = useState("");
-  const [workspaceUploading, setWorkspaceUploading] = useState(false);
+  const [evidenceUploading, setEvidenceUploading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [findingsData, setFindingsData] = useState(null);
   const [anomaliesData, setAnomaliesData] = useState(null);
@@ -67,18 +87,23 @@ function App() {
     status: "Processed",
   }));
 
-  const refreshInvestigations = useCallback(async () => {
+  const refreshInvestigations = useCallback(async (updatedDetail) => {
     setInvestigationsLoading(true);
     setInvestigationsError("");
     try {
       const rows = await requestJson("/investigations");
       const enrichedRows = await Promise.all(
         rows.map(async (item) => {
-          const detail = await requestJson(
-            `/investigations/${encodeURIComponent(item.investigation_id)}`
-          );
+          const detail =
+            item.investigation_id === updatedDetail?.investigation_id
+              ? updatedDetail
+              : await requestJson(
+                  `/investigations/${encodeURIComponent(item.investigation_id)}`
+                );
           return {
             ...item,
+            evidence_file_count:
+              detail.evidence_files?.length ?? item.evidence_file_count,
             total_findings:
               detail.analysis?.detection?.total_findings ?? 0,
           };
@@ -202,34 +227,40 @@ function App() {
 
   useEffect(() => {
     try {
-      if (investigationId) {
+      window.localStorage.setItem("tattva:active-page", activePage);
+    } catch {
+      // The selected page remains usable when browser storage is unavailable.
+    }
+  }, [activePage]);
+
+  useEffect(() => {
+    if (investigationId) {
+      try {
         window.localStorage.setItem(
           "tattva:selected-investigation",
           investigationId
         );
-        Promise.resolve()
-          .then(() => loadInvestigation(investigationId))
-          .catch((error) => {
-            if (error.status === 404) {
-              setInvestigationId("");
-              setActivePage("Investigations");
-              setInvestigation(null);
-              setAnalysisResult(null);
-              setEvidenceRecords([]);
-              setFindingsData(null);
-              setAnomaliesData(null);
-              setTimelineRecords([]);
-              setGraphData({ nodes: [], edges: [] });
-            }
-          });
-      } else {
-        window.localStorage.removeItem("tattva:selected-investigation");
+      } catch {
+        // Continue loading the selected investigation without browser storage.
       }
-    } catch {
-      if (investigationId) {
-        Promise.resolve()
-          .then(() => loadInvestigation(investigationId))
-          .catch(() => {});
+
+      Promise.resolve()
+        .then(() => loadInvestigation(investigationId))
+        .catch((error) => {
+          if (error.status === 404) {
+            setInvestigationId("");
+            setActivePage("Investigations");
+            setWorkspaceError("");
+            setWorkspaceNotice("");
+            return;
+          }
+          setWorkspaceError(error.message);
+        });
+    } else {
+      try {
+        window.localStorage.removeItem("tattva:selected-investigation");
+      } catch {
+        // The application can continue without browser storage.
       }
     }
   }, [investigationId, loadInvestigation]);
@@ -238,10 +269,12 @@ function App() {
     (id) => {
       setWorkspaceNotice("");
       setWorkspaceError("");
-      setActivePage("Investigation Workspace");
+      setActivePage("Dashboard");
       if (id === investigationId) {
         loadInvestigation(id).catch(() => {});
       } else {
+        setInvestigation(null);
+        setWorkspaceLoading(true);
         setInvestigationId(id);
       }
     },
@@ -254,7 +287,9 @@ function App() {
     setWorkspaceNotice(
       `Investigation created successfully. ID: ${created.investigation_id}`
     );
-    setActivePage("Investigation Workspace");
+    setActivePage("Dashboard");
+    setInvestigation(null);
+    setWorkspaceLoading(true);
     setInvestigationId(created.investigation_id);
   };
 
@@ -264,7 +299,7 @@ function App() {
       return false;
     }
 
-    setWorkspaceUploading(true);
+    setEvidenceUploading(true);
     setWorkspaceError("");
     setWorkspaceNotice("");
     const formData = new FormData();
@@ -279,9 +314,9 @@ function App() {
       setWorkspaceNotice(
         `${result.evidence_file.filename} was uploaded and analyzed in this investigation.`
       );
-      await refreshInvestigations();
       try {
-        await loadInvestigation(investigationId);
+        const detail = await loadInvestigation(investigationId);
+        await refreshInvestigations(detail);
       } catch {
         setWorkspaceError(
           "Evidence was uploaded, but the latest investigation details could not be refreshed."
@@ -292,9 +327,24 @@ function App() {
       setWorkspaceError(error.message);
       return false;
     } finally {
-      setWorkspaceUploading(false);
+      setEvidenceUploading(false);
     }
   };
+
+  const handleEvidenceUpload = async (event) => {
+    event.preventDefault();
+    if (!selectedFile) {
+      setWorkspaceError("Choose an evidence file to upload.");
+      return;
+    }
+
+    const uploaded = await handleAddEvidence(selectedFile, sourceType);
+    if (uploaded) {
+      setSelectedFile(null);
+      setEvidenceInputKey((key) => key + 1);
+    }
+  };
+
   // Create and execute a What-If simulation using the backend.
   const handleRunSimulation = async () => {
     setSimulationError("");
@@ -303,7 +353,7 @@ function App() {
 
     if (!investigationId || !analysisResult?.baseline_analysis_id) {
       setSimulationError(
-        "Please upload and analyze evidence before running a simulation."
+        "Add evidence from Evidence Explorer before running a simulation."
       );
       return;
     }
@@ -425,94 +475,36 @@ function App() {
     }
   };
 
-  // Keep the legacy quick-analysis workflow available from the dashboard.
-  const handleUpload = async (event) => {
-    event.preventDefault();
-
-    if (!selectedFile) {
-      setUploadError("Please select a file first.");
-      return;
-    }
-
-    setUploading(true);
-    setUploadError("");
-    setUploadSuccess("");
-
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-    formData.append("source_type", sourceType);
-
-    try {
-      const data = await requestJson("/analyze", {
-        method: "POST",
-        body: formData,
-      });
-
-      setWorkspaceNotice(
-        `Evidence analyzed successfully. Investigation ID: ${data.investigation_id}`
-      );
-      setActivePage("Investigation Workspace");
-      setInvestigationId(data.investigation_id);
-      setUploadSuccess(`Analysis complete for ${data.investigation_id}.`);
-      setSelectedFile(null);
-      await refreshInvestigations();
-    } catch (error) {
-      setUploadError(error.message);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const menuItems = [
-    { label: "Dashboard", icon: "▦" },
-    { label: "Evidence Explorer", icon: "▣" },
-    { label: "Incident Timeline", icon: "◷" },
-    { label: "Evidence Graph", icon: "◎" },
-    { label: "What-If Simulator", icon: "⇄" },
-    { label: "Reports", icon: "▤" },
-    { label: "Investigations", icon: "⌕" },
-  ];
-
-  const totalInvestigations = investigations.length;
-  const activeInvestigations = investigations.filter(
-    (item) => !["completed", "closed"].includes(item.status.toLowerCase())
-  ).length;
-  const totalEvidenceFiles = investigations.reduce(
-    (total, item) => total + (item.evidence_file_count || 0),
-    0
+  const findingsList = Array.isArray(findingsData?.findings)
+    ? findingsData.findings
+    : Array.isArray(analysisResult?.detection?.findings)
+      ? analysisResult.detection.findings
+      : [];
+  const severityBreakdown = findingsList.reduce((counts, finding) => {
+    const severity = String(finding.severity || "Unspecified").toUpperCase();
+    counts[severity] = (counts[severity] || 0) + 1;
+    return counts;
+  }, {});
+  const severityEntries = Object.entries(severityBreakdown).sort(
+    ([left], [right]) => left.localeCompare(right)
   );
-  const totalFindings = investigations.reduce(
-    (total, item) => total + (item.total_findings || 0),
-    0
-  );
-
-  const stats = [
-    {
-      title: "Total Investigations",
-      value: String(totalInvestigations),
-      note: "Cases in this workspace",
-      icon: "▣",
-    },
-    {
-      title: "Active Investigations",
-      value: String(activeInvestigations),
-      note: "Not completed or closed",
-      icon: "⌕",
-    },
-    {
-      title: "Evidence Files",
-      value: String(totalEvidenceFiles),
-      note: "Files across investigations",
-      icon: "◈",
-    },
-    {
-      title: "Total Findings",
-      value: String(totalFindings),
-      note: "Findings across investigations",
-      icon: "⌘",
-    },
-  ];
-  const recentInvestigations = investigations.slice(0, 5);
+  const evidenceFiles = investigation?.evidence_files || [];
+  const recentEvidenceFiles = [...evidenceFiles]
+    .sort(
+      (left, right) =>
+        new Date(right.acquired_at || 0) - new Date(left.acquired_at || 0)
+    )
+    .slice(0, 5);
+  const totalFindings =
+    investigationSummary?.total_findings ??
+    findingsData?.total_findings ??
+    findingsList.length;
+  const totalAnomalies =
+    investigationSummary?.total_anomalies ??
+    anomaliesData?.anomaly_count ??
+    anomaliesData?.anomalies?.length ??
+    analysisResult?.anomaly_detection?.anomaly_count ??
+    0;
 
   return (
     <div className="app-container">
@@ -555,263 +547,192 @@ function App() {
 
       <main className="main-content">
         <header className="topbar">
-          <div>
+          <div className="topbar-title">
+            {investigation && activePage !== "Investigations" && (
+              <div
+                className={`selected-investigation-context ${
+                  activePage === "Dashboard" ? "dashboard-context" : ""
+                }`}
+              >
+                <span className="eyebrow">
+                  {activePage === "Dashboard"
+                    ? "ACTIVE INVESTIGATION"
+                    : "SELECTED INVESTIGATION"}
+                </span>
+                <strong>{investigation.name}</strong>
+                <small>{investigation.investigation_id}</small>
+              </div>
+            )}
             <span className="eyebrow">
-              INVESTIGATION WORKSPACE
+              {activePage === "Investigations"
+                ? "CASE MANAGEMENT"
+                : activePage === "Dashboard"
+                  ? "CASE OVERVIEW"
+                  : "INVESTIGATION WORKSPACE"}
             </span>
-
             <h1>{activePage}</h1>
           </div>
-
-          <button
-            className="primary-button"
-            onClick={() => setShowCreateModal(true)}
-          >
-            + New Investigation
-          </button>
+          {activePage !== "Investigations" && (
+            <button
+              className="secondary-button"
+              onClick={() => setActivePage("Investigations")}
+            >
+              All Investigations
+            </button>
+          )}
         </header>
 
         {/* DASHBOARD */}
         {activePage === "Dashboard" ? (
-          <>
-            <section className="welcome-card">
-              <div>
-                <span className="eyebrow">
-                  CASE MONITORING
-                </span>
-
-                <h2>Investigation Overview</h2>
-
-                <p>
-                  Monitor evidence, findings and investigation activity
-                  from one workspace.
+          !investigation ? (
+            <section className="management-card management-empty dashboard-empty">
+              {workspaceLoading ? (
+                <p className="management-state" role="status">
+                  Loading investigation...
                 </p>
-              </div>
-
-              <div className="system-status">
-                <span className="status-dot"></span>
-                SYSTEM READY
-              </div>
-            </section>
-
-            {/* EVIDENCE UPLOAD */}
-            <section className="information-card">
-              <h3>Upload Digital Evidence</h3>
-
-              <p>
-                Upload forensic logs for automated investigation and
-                analysis.
-              </p>
-
-              <form onSubmit={handleUpload}>
-                <input
-                  type="file"
-                  accept=".log,.txt,.csv,.json"
-                  onChange={(event) =>
-                    setSelectedFile(
-                      event.target.files[0] || null
-                    )
-                  }
-                />
-
-                <select
-                  value={sourceType}
-                  onChange={(event) =>
-                    setSourceType(event.target.value)
-                  }
-                >
-                  <option value="authentication">
-                    Authentication
-                  </option>
-
-                  <option value="file">
-                    File Activity
-                  </option>
-
-                  <option value="network">
-                    Network
-                  </option>
-
-                  <option value="archive">
-                    Archive
-                  </option>
-                </select>
-
-                <button
-                  type="submit"
-                  className="primary-button"
-                  disabled={uploading}
-                >
-                  {uploading
-                    ? "Analyzing..."
-                    : "Upload & Analyze"}
-                </button>
-              </form>
-
-              {uploadError && (
-                <p role="alert">{uploadError}</p>
-              )}
-
-              {uploadSuccess && (
-                <p className="success-message" role="status">
-                  {uploadSuccess}
-                </p>
-              )}
-
-              {investigationId && investigation && (
-                <p>
-                  Current investigation: <strong>{investigation.name}</strong>
-                  {" · "}
-                  {investigationId}
-                </p>
-              )}
-            </section>
-
-            {/* DASHBOARD STATISTICS */}
-            <section className="stats-grid">
-              {stats.map((stat) => (
-                <div className="stat-card" key={stat.title}>
-                  <div className="stat-top">
-                    <span>{stat.title}</span>
-                    <span className="stat-icon">
-                      {stat.icon}
-                    </span>
-                  </div>
-
-                  <h2>{stat.value}</h2>
-                  <p>{stat.note}</p>
-                </div>
-              ))}
-            </section>
-
-            {investigationsError && (
-              <p className="management-message error-message" role="alert">
-                {investigationsError}
-                {" "}
-                <button
-                  className="text-button"
-                  onClick={refreshInvestigations}
-                >
-                  Retry
-                </button>
-              </p>
-            )}
-
-            {/* RECENT INVESTIGATIONS */}
-            <section className="activity-section">
-              <div className="section-heading">
-                <div>
-                  <h2>Recent Investigations</h2>
-                  <p>Recently updated cases in this workspace.</p>
-                </div>
-                <button
-                  className="text-button"
-                  onClick={() => setActivePage("Investigations")}
-                >
-                  View all investigations
-                </button>
-              </div>
-
-              <div className="activity-card">
-                {investigationsLoading ? (
-                  <p className="management-state">
-                    Loading recent investigations...
+              ) : workspaceError ? (
+                <>
+                  <h2>Investigation unavailable</h2>
+                  <p className="management-message error-message" role="alert">
+                    {workspaceError}
                   </p>
-                ) : recentInvestigations.length ? (
-                  recentInvestigations.map((item) => (
-                  <div
-                    className="activity-item"
-                    key={item.investigation_id}
-                  >
-                    <div className="activity-details">
-                      <strong>{item.name}</strong>
-                      <p>
-                        {item.investigation_id}
-                        {" · "}
-                        {item.evidence_file_count} evidence files
-                        {" · "}
-                        {item.total_findings} findings
-                      </p>
-                    </div>
-                    <span className="activity-time">
-                      {formatDate(item.updated_at)}
-                    </span>
-                    <span className="status-pill">{item.status}</span>
+                  {investigationId && (
                     <button
                       className="secondary-button"
-                      onClick={() => openInvestigation(item.investigation_id)}
+                      onClick={() =>
+                        loadInvestigation(investigationId).catch(() => {})
+                      }
                     >
-                      Open
+                      Retry
                     </button>
-                  </div>
-                  ))
-                ) : (
-                  <p className="management-state">
-                    No investigations yet. Create one to begin.
-                  </p>
-                )}
-              </div>
+                  )}
+                  <button
+                    className="text-button"
+                    onClick={() => setActivePage("Investigations")}
+                  >
+                    All Investigations
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h2>No investigation selected</h2>
+                  <p>Open an investigation to view its dashboard and analysis.</p>
+                  <button
+                    className="primary-button"
+                    onClick={() => setActivePage("Investigations")}
+                  >
+                    All Investigations
+                  </button>
+                </>
+              )}
             </section>
-
-            {/* DASHBOARD SHORTCUTS */}
-            <section className="bottom-grid">
-              <div className="information-card">
-                <h3>Selected Investigation</h3>
-                {investigation ? (
-                  <>
-                    <p>
-                      {investigation.name} · {investigation.investigation_id}
-                    </p>
-                    <p>
-                      {analysisResult?.evidence_records?.length ?? 0} records
-                      {" · "}
-                      {analysisResult?.detection?.total_findings ?? 0} findings
-                    </p>
-                    <button
-                      className="text-button"
-                      onClick={() => setActivePage("Investigation Workspace")}
-                    >
-                      Open workspace
-                    </button>
-                  </>
-                ) : (
-                  <p>Select an investigation to see its current analysis.</p>
-                )}
-              </div>
-
-              <div className="information-card quick-card">
-                <h3>Quick Access</h3>
-
-                <p>
-                  Navigate to important investigation tools
+          ) : (
+            <>
+              {workspaceNotice && (
+                <p className="management-message success-message" role="status">
+                  {workspaceNotice}
                 </p>
+              )}
+              {workspaceError && (
+                <p className="management-message error-message" role="alert">
+                  {workspaceError}
+                </p>
+              )}
 
-                <button
-                  onClick={() =>
-                    setActivePage("Evidence Explorer")
-                  }
-                >
-                  + Explore Evidence
-                </button>
+              <section className="welcome-card dashboard-case-card">
+                <div>
+                  <span className="eyebrow">INVESTIGATION STATUS</span>
+                  <p>
+                    {investigation.description ||
+                      "Review evidence and analysis for this investigation."}
+                  </p>
+                </div>
+                <span className="status-pill">{investigation.status}</span>
+              </section>
 
-                <button
-                  onClick={() =>
-                    setActivePage("Incident Timeline")
-                  }
-                >
-                  ◷ View Incident Timeline
-                </button>
+              {workspaceLoading && (
+                <p className="management-state" role="status">
+                  Refreshing investigation data...
+                </p>
+              )}
 
-                <button
-                  onClick={() =>
-                    setActivePage("Evidence Graph")
-                  }
-                >
-                  ◎ Open Evidence Graph
-                </button>
+              <section className="stats-grid dashboard-stats-grid">
+                {[
+                  ["Evidence Files", evidenceFiles.length],
+                  ["Total Findings", totalFindings],
+                  ["Total Anomalies", totalAnomalies],
+                ].map(([label, value]) => (
+                  <div className="stat-card" key={label}>
+                    <div className="stat-top">
+                      <span>{label}</span>
+                    </div>
+                    <h2>{value}</h2>
+                    <p>{investigation.name}</p>
+                  </div>
+                ))}
+              </section>
+
+              <div className="dashboard-details-grid">
+                <section className="information-card severity-card">
+                  <h3>Severity Breakdown</h3>
+                  {severityEntries.length ? (
+                    severityEntries.map(([severity, count]) => (
+                      <div className="severity-row" key={severity}>
+                        <span className={`severity-label severity-${severity.toLowerCase()}`}>
+                          {severity}
+                        </span>
+                        <div
+                          className="severity-track"
+                          role="progressbar"
+                          aria-label={`${severity} findings`}
+                          aria-valuemin="0"
+                          aria-valuemax={findingsList.length}
+                          aria-valuenow={count}
+                        >
+                          <span
+                            style={{
+                              width: `${(count / findingsList.length) * 100}%`,
+                            }}
+                          />
+                        </div>
+                        <strong>{count}</strong>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="management-state">
+                      No findings are available for severity analysis.
+                    </p>
+                  )}
+                </section>
+
+                <section className="information-card recent-evidence-card">
+                  <h3>Recent Evidence Activity</h3>
+                  {recentEvidenceFiles.length ? (
+                    <div className="recent-evidence-list">
+                      {recentEvidenceFiles.map((file) => (
+                        <div
+                          className="recent-evidence-item"
+                          key={file.source_id}
+                        >
+                          <div>
+                            <strong>{file.filename}</strong>
+                            <span>{file.source_type}</span>
+                          </div>
+                          <time dateTime={file.acquired_at}>
+                            {formatDate(file.acquired_at)}
+                          </time>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="management-state">
+                      No evidence files have been added to this investigation.
+                    </p>
+                  )}
+                </section>
               </div>
-            </section>
-          </>
+            </>
+          )
         ) : activePage === "Investigations" ? (
           <InvestigationList
             investigations={investigations}
@@ -821,19 +742,47 @@ function App() {
             onOpen={openInvestigation}
             onCreate={() => setShowCreateModal(true)}
           />
-        ) : activePage === "Investigation Workspace" ? (
-          <InvestigationWorkspace
-            investigation={investigation}
-            analysis={analysisResult}
-            summary={investigationSummary}
-            findings={findingsData}
-            anomalies={anomaliesData}
-            loading={workspaceLoading}
-            error={workspaceError}
-            notice={workspaceNotice}
-            uploading={workspaceUploading}
-            onUpload={handleAddEvidence}
-          />
+        ) : !investigation ? (
+          <section className="management-card management-empty">
+            {workspaceLoading ? (
+              <p className="management-state" role="status">
+                Loading investigation...
+              </p>
+            ) : (
+              <>
+                <h2>
+                  {workspaceError
+                    ? "Investigation unavailable"
+                    : "No investigation selected"}
+                </h2>
+                {workspaceError ? (
+                  <p className="management-message error-message" role="alert">
+                    {workspaceError}
+                  </p>
+                ) : (
+                  <p>
+                    Open an investigation before using {activePage}.
+                  </p>
+                )}
+                {investigationId && workspaceError && (
+                  <button
+                    className="secondary-button"
+                    onClick={() =>
+                      loadInvestigation(investigationId).catch(() => {})
+                    }
+                  >
+                    Retry
+                  </button>
+                )}
+                <button
+                  className="primary-button"
+                  onClick={() => setActivePage("Investigations")}
+                >
+                  All Investigations
+                </button>
+              </>
+            )}
+          </section>
         ) : activePage === "Evidence Explorer" ? (
           /* EVIDENCE EXPLORER */
           <section className="evidence-page">
@@ -852,14 +801,106 @@ function App() {
               </div>
             </div>
 
+            <div className="selected-case-strip">
+              <span className="eyebrow">CURRENT INVESTIGATION</span>
+              <strong>{investigation.name}</strong>
+              <small>{investigation.investigation_id}</small>
+            </div>
+
+            {workspaceError && (
+              <p className="management-message error-message" role="alert">
+                {workspaceError}
+              </p>
+            )}
+            {workspaceNotice && (
+              <p className="management-message success-message" role="status">
+                {workspaceNotice}
+              </p>
+            )}
+
+            <div className="information-card">
+              <p>
+                Add evidence to this investigation. New files are analyzed
+                together with its existing evidence.
+              </p>
+              <form
+                className="workspace-upload-form evidence-upload-form"
+                onSubmit={handleEvidenceUpload}
+              >
+                <label>
+                  Evidence file
+                  <input
+                    key={evidenceInputKey}
+                    type="file"
+                    accept=".log,.txt,.csv,.json"
+                    onChange={(event) =>
+                      setSelectedFile(event.target.files?.[0] || null)
+                    }
+                    disabled={evidenceUploading}
+                  />
+                </label>
+                <label>
+                  Source type
+                  <select
+                    value={sourceType}
+                    onChange={(event) => setSourceType(event.target.value)}
+                    disabled={evidenceUploading}
+                  >
+                    <option value="authentication">Authentication</option>
+                    <option value="file">File Activity</option>
+                    <option value="network">Network</option>
+                    <option value="archive">Archive</option>
+                  </select>
+                </label>
+                <button
+                  className="primary-button"
+                  type="submit"
+                  disabled={!selectedFile || evidenceUploading}
+                >
+                  {evidenceUploading ? "Analyzing evidence..." : "Add Evidence"}
+                </button>
+              </form>
+              {evidenceUploading && (
+                <p className="upload-progress" role="status">
+                  Uploading and analyzing combined investigation evidence...
+                </p>
+              )}
+            </div>
+
+            <div className="information-card evidence-files-card">
+              <h3>Evidence Files</h3>
+              {evidenceFiles.length ? (
+                <div className="evidence-file-list">
+                  {evidenceFiles.map((file) => (
+                    <article
+                      className="evidence-file-item"
+                      key={file.source_id}
+                    >
+                      <div className="evidence-file-heading">
+                        <strong>{file.filename}</strong>
+                        <span className="status-pill">{file.source_type}</span>
+                      </div>
+                      <p>
+                        {(file.file_size_bytes / 1024).toFixed(1)} KB
+                        {" · "}
+                        {formatDate(file.acquired_at)}
+                      </p>
+                      <code title={file.sha256}>{file.sha256}</code>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="management-state">
+                  No evidence files have been added to this investigation.
+                </p>
+              )}
+            </div>
+
             <div className="information-card">
               <h3>Evidence Records</h3>
-
               <p>
-                Actual digital evidence records collected and
-                processed during the investigation.
+                Processed records belonging to {investigation.name}.
               </p>
-
               <table className="evidence-table">
                 <thead>
                   <tr>
@@ -883,8 +924,7 @@ function App() {
                   ) : (
                     <tr>
                       <td colSpan="4">
-                        No evidence uploaded yet. Upload a forensic
-                        file to begin.
+                        No evidence records are available for this investigation.
                       </td>
                     </tr>
                   )}
@@ -970,8 +1010,8 @@ function App() {
                   <h3>No Timeline Events</h3>
 
                   <p>
-                    Upload and analyze an evidence file to view its
-                    events in chronological order.
+                    Add evidence from Evidence Explorer to view its events in
+                    chronological order.
                   </p>
                 </div>
               )}
@@ -1126,8 +1166,8 @@ function App() {
                     <h3>No Graph Data Available</h3>
 
                     <p>
-                      Upload and analyze an evidence file to view
-                      its nodes and relationships.
+                      Add evidence from Evidence Explorer to view its nodes and
+                      relationships.
                     </p>
                   </div>
                 )}
@@ -1192,8 +1232,8 @@ function App() {
 
               {!investigationId ? (
                 <p>
-                  Upload and analyze an evidence file before starting
-                  a simulation.
+                  Select an investigation and add evidence in Evidence Explorer
+                  before starting a simulation.
                 </p>
               ) : (
                 <>
@@ -1451,8 +1491,8 @@ function App() {
                 <div className="information-card">
                   <h3>No Investigation Available</h3>
                   <p>
-                    Upload and analyze an evidence file to generate
-                    your forensic report.
+                    Add evidence from Evidence Explorer to generate this
+                    investigation's forensic report.
                   </p>
                 </div>
               ) : (

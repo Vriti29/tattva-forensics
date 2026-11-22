@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { formatDate, requestJson } from "./investigationApi.js";
 
 export function CreateInvestigationModal({ onClose, onCreated }) {
@@ -141,7 +141,7 @@ export function InvestigationList({
         <div>
           <span className="eyebrow">CASE MANAGEMENT</span>
           <h2>All Investigations</h2>
-          <p>Search, review, and open investigation workspaces.</p>
+          <p>Search, review, and open investigation dashboards.</p>
         </div>
         <button className="primary-button" onClick={onCreate}>
           + New Investigation
@@ -200,7 +200,7 @@ export function InvestigationList({
           <p className="management-state">No investigations match these filters.</p>
         ) : (
           <div className="management-table-wrap">
-            <table className="management-table">
+            <table className="management-table investigations-table">
               <thead>
                 <tr>
                   <th>Investigation</th>
@@ -216,6 +216,7 @@ export function InvestigationList({
                 {visibleInvestigations.map((item) => (
                   <tr key={item.investigation_id}>
                     <td>
+                      <span className="table-cell-label">Investigation</span>
                       <strong>{item.name}</strong>
                       <span className="table-secondary">
                         {item.investigation_id}
@@ -226,19 +227,25 @@ export function InvestigationList({
                         </span>
                       )}
                     </td>
-                    <td>{formatDate(item.created_at)}</td>
-                    <td>{formatDate(item.updated_at)}</td>
+                    <td data-label="Created">{formatDate(item.created_at)}</td>
+                    <td data-label="Last updated">
+                      {formatDate(item.updated_at)}
+                    </td>
                     <td>
+                      <span className="table-cell-label">Status</span>
                       <span className="status-pill">{item.status}</span>
                     </td>
-                    <td>{item.evidence_file_count ?? 0}</td>
-                    <td>{item.total_findings ?? 0}</td>
+                    <td data-label="Evidence files">
+                      {item.evidence_file_count ?? 0}
+                    </td>
+                    <td data-label="Findings">{item.total_findings ?? 0}</td>
                     <td>
+                      <span className="table-cell-label">Actions</span>
                       <button
                         className="secondary-button"
                         onClick={() => onOpen(item.investigation_id)}
                       >
-                        Open
+                        Open Investigation
                       </button>
                     </td>
                   </tr>
@@ -261,27 +268,8 @@ export function InvestigationWorkspace({
   loading,
   error,
   notice,
-  uploading,
-  onUpload,
 }) {
-  const [file, setFile] = useState(null);
-  const [sourceType, setSourceType] = useState("authentication");
-  const fileInput = useRef(null);
   const files = investigation?.evidence_files || [];
-
-  const handleUpload = async (event) => {
-    event.preventDefault();
-    if (!file) {
-      return;
-    }
-    const succeeded = await onUpload(file, sourceType);
-    if (succeeded) {
-      setFile(null);
-      if (fileInput.current) {
-        fileInput.current.value = "";
-      }
-    }
-  };
 
   if (loading && !investigation) {
     return <p className="management-state">Loading investigation workspace...</p>;
@@ -391,41 +379,6 @@ export function InvestigationWorkspace({
             No evidence files have been added to this investigation.
           </p>
         )}
-      </div>
-
-      <div className="management-card upload-evidence-card">
-        <h3>Add Evidence</h3>
-        <p>Uploads are analyzed with the evidence already in this investigation.</p>
-        <form className="workspace-upload-form" onSubmit={handleUpload}>
-          <label>
-            Evidence file
-            <input
-              ref={fileInput}
-              type="file"
-              accept=".log,.txt,.csv,.json"
-              onChange={(event) => setFile(event.target.files?.[0] || null)}
-            />
-          </label>
-          <label>
-            Source type
-            <select
-              value={sourceType}
-              onChange={(event) => setSourceType(event.target.value)}
-            >
-              <option value="authentication">Authentication</option>
-              <option value="file">File Activity</option>
-              <option value="network">Network</option>
-              <option value="archive">Archive</option>
-            </select>
-          </label>
-          <button
-            className="primary-button"
-            type="submit"
-            disabled={!file || uploading}
-          >
-            {uploading ? "Analyzing..." : "Upload to Investigation"}
-          </button>
-        </form>
       </div>
 
       <div className="workspace-analysis-grid">
