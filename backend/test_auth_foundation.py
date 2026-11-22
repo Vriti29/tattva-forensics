@@ -207,6 +207,8 @@ def test_argon2id_password_hashing_and_verification():
     assert not verify_password("wrong-password", encoded)
     with pytest.raises(ValueError):
         hash_password("")
+    with pytest.raises(ValueError):
+        hash_password("short")
 
 
 def test_sessions_store_only_token_hashes_and_deactivation_revokes_them(

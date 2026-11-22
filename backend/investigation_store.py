@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import hashlib
+import hmac
 import json
 import sqlite3
 from contextlib import closing
@@ -460,6 +461,33 @@ class InvestigationStore:
                 )
                 if cursor.rowcount == 0:
                     raise ValueError("Investigation not found")
+                if uploader_user_id is not None:
+                    connection.execute(
+                        """
+                        INSERT INTO audit_events (
+                            event_id, actor_user_id, action, timestamp,
+                            investigation_id, evidence_id, target_id,
+                            metadata_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            uuid4().hex,
+                            uploader_user_id,
+                            "EVIDENCE_UPLOADED",
+                            updated_at,
+                            investigation_id,
+                            file_id,
+                            file_id,
+                            json.dumps(
+                                {
+                                    "filename": filename,
+                                    "sha256": metadata.get("sha256"),
+                                },
+                                ensure_ascii=False,
+                                sort_keys=True,
+                            ),
+                        ),
+                    )
 
     @staticmethod
     def _user_from_row(row):
@@ -593,12 +621,137 @@ class InvestigationStore:
             ).fetchone()
         return self._user_from_row(row)
 
+    def get_user_auth_record(self, username):
+        normalized_username = _normalize_username(username)
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM users WHERE normalized_username = ?
+                """,
+                (normalized_username,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "user": self._user_from_row(row),
+            "password_hash": row["password_hash"],
+        }
+
     def list_users(self):
         with closing(self._connect()) as connection:
             rows = connection.execute(
                 "SELECT * FROM users ORDER BY created_at, user_id"
             ).fetchall()
         return [self._user_from_row(row) for row in rows]
+
+    def update_user(self, user_id, role=None, is_active=None, changed_at=None):
+        if role is not None and (not isinstance(role, str) or role not in ROLES):
+            raise ValueError(f"Unsupported role: {role}")
+        if is_active is not None and not isinstance(is_active, bool):
+            raise ValueError("is_active must be a boolean")
+        if role is None and is_active is None:
+            raise ValueError("At least one account field must be updated")
+
+        changed_at = changed_at or _now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute(
+                    "SELECT role, is_active FROM users WHERE user_id = ?",
+                    (user_id,),
+                ).fetchone()
+                if row is None:
+                    connection.rollback()
+                    return None
+
+                next_role = role if role is not None else row["role"]
+                next_active = (
+                    is_active if is_active is not None else bool(row["is_active"])
+                )
+                if (
+                    row["role"] == "ADMIN"
+                    and row["is_active"]
+                    and (next_role != "ADMIN" or not next_active)
+                ):
+                    other_admin = connection.execute(
+                        """
+                        SELECT 1 FROM users
+                        WHERE role = 'ADMIN' AND is_active = 1
+                            AND user_id != ?
+                        LIMIT 1
+                        """,
+                        (user_id,),
+                    ).fetchone()
+                    if other_admin is None:
+                        raise ValueError(
+                            "At least one active Admin account must remain"
+                        )
+
+                updates = []
+                values = []
+                if role is not None:
+                    updates.append("role = ?")
+                    values.append(role)
+                if is_active is not None:
+                    updates.extend(["is_active = ?", "deactivated_at = ?"])
+                    values.extend(
+                        [int(is_active), None if is_active else changed_at]
+                    )
+                values.append(user_id)
+                connection.execute(
+                    f"UPDATE users SET {', '.join(updates)} WHERE user_id = ?",
+                    values,
+                )
+                if is_active is False:
+                    connection.execute(
+                        """
+                        UPDATE sessions SET revoked_at = ?
+                        WHERE user_id = ? AND revoked_at IS NULL
+                        """,
+                        (changed_at, user_id),
+                    )
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        return self.get_user(user_id)
+
+    def update_user_password(
+        self,
+        user_id,
+        password_hash,
+        password_change_required,
+        changed_at=None,
+    ):
+        if not is_argon2id_hash(password_hash):
+            raise ValueError("An Argon2id password hash is required")
+        if not isinstance(password_change_required, bool):
+            raise ValueError("password_change_required must be a boolean")
+        changed_at = changed_at or _now()
+        with closing(self._connect()) as connection:
+            with connection:
+                cursor = connection.execute(
+                    """
+                    UPDATE users
+                    SET password_hash = ?, password_change_required = ?
+                    WHERE user_id = ?
+                    """,
+                    (
+                        password_hash,
+                        int(password_change_required),
+                        user_id,
+                    ),
+                )
+                if cursor.rowcount == 0:
+                    return None
+                connection.execute(
+                    """
+                    UPDATE sessions SET revoked_at = ?
+                    WHERE user_id = ? AND revoked_at IS NULL
+                    """,
+                    (changed_at, user_id),
+                )
+        return self.get_user(user_id)
 
     def set_user_active(self, user_id, is_active, changed_at=None):
         if not isinstance(is_active, bool):
@@ -633,18 +786,36 @@ class InvestigationStore:
             raise ValueError("A session token is required")
         return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
-    def create_session(self, user_id, token, expires_at, created_at=None):
+    def create_session(
+        self,
+        user_id,
+        token,
+        expires_at,
+        created_at=None,
+        expected_password_hash=None,
+    ):
         token_hash = self._token_hash(token)
         created_at = created_at or _now()
         session_id = uuid4().hex
         with closing(self._connect()) as connection:
             with connection:
                 user = connection.execute(
-                    "SELECT is_active FROM users WHERE user_id = ?",
+                    """
+                    SELECT is_active, password_hash
+                    FROM users WHERE user_id = ?
+                    """,
                     (user_id,),
                 ).fetchone()
                 if user is None or not user["is_active"]:
                     raise ValueError("An active user is required for a session")
+                if (
+                    expected_password_hash is not None
+                    and not hmac.compare_digest(
+                        user["password_hash"],
+                        expected_password_hash,
+                    )
+                ):
+                    raise ValueError("Credentials changed during login")
                 connection.execute(
                     """
                     INSERT INTO sessions (
@@ -662,6 +833,46 @@ class InvestigationStore:
                     ),
                 )
         return session_id
+
+    def get_session_by_token(self, token):
+        token_hash = self._token_hash(token)
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT s.session_id, s.user_id, s.created_at, s.expires_at,
+                    s.last_seen_at, s.revoked_at,
+                    u.username, u.role, u.is_active, u.created_by,
+                    u.deactivated_at, u.password_change_required
+                FROM sessions AS s
+                JOIN users AS u ON u.user_id = s.user_id
+                WHERE s.token_hash = ?
+                """,
+                (token_hash,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "session_id": row["session_id"],
+            "user_id": row["user_id"],
+            "created_at": row["created_at"],
+            "expires_at": row["expires_at"],
+            "last_seen_at": row["last_seen_at"],
+            "revoked_at": row["revoked_at"],
+            "user": self._user_from_row(row),
+        }
+
+    def touch_session(self, session_id, last_seen_at=None):
+        last_seen_at = last_seen_at or _now()
+        with closing(self._connect()) as connection:
+            with connection:
+                cursor = connection.execute(
+                    """
+                    UPDATE sessions SET last_seen_at = ?
+                    WHERE session_id = ? AND revoked_at IS NULL
+                    """,
+                    (last_seen_at, session_id),
+                )
+        return cursor.rowcount > 0
 
     def revoke_session(self, session_id, revoked_at=None):
         revoked_at = revoked_at or _now()

@@ -1,6 +1,12 @@
+import os
+from pathlib import Path
+
 from fastapi import FastAPI
 
+from backend.api.auth_routes import router as auth_router
 from backend.api.simulation_setup import install_simulation_api
+from backend.auth.security import configure_http_security
+from backend.investigation_store import InvestigationStore
 
 
 app = FastAPI(
@@ -8,6 +14,13 @@ app = FastAPI(
     description="What-If Investigation Simulator API",
     version="1.0.0"
 )
+configured_directory = os.environ.get(
+    "TATTVA_DATA_DIR",
+    str(Path(__file__).resolve().parents[1] / "data"),
+)
+app.state.investigation_store = InvestigationStore(configured_directory)
+configure_http_security(app)
+app.include_router(auth_router)
 
 
 # ----------------------------------

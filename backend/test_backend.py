@@ -1,8 +1,12 @@
+import atexit
+import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.api.main import app, create_app
+from backend.api.main import create_app
+from backend.auth.passwords import hash_password
 from backend.ingestion.auth_parser import parse_auth_log
 from backend.ingestion.file_parser import parse_file_log
 from backend.ingestion.network_parser import parse_network_log
@@ -18,7 +22,59 @@ from backend.pipeline import process_evidence_file
 from backend.ingestion.structured_parser import parse_structured_content
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "test_data"
-client = TestClient(app)
+_TEST_DATA_DIRECTORY = TemporaryDirectory(prefix="tattva-backend-tests-")
+
+
+def _create_test_app(data_directory):
+    env_values = {
+        "TATTVA_ENV": os.environ.get("TATTVA_ENV"),
+        "TATTVA_CORS_ORIGINS": os.environ.get("TATTVA_CORS_ORIGINS"),
+    }
+    os.environ["TATTVA_ENV"] = "test"
+    os.environ["TATTVA_CORS_ORIGINS"] = "http://127.0.0.1:5173"
+    try:
+        return create_app(data_directory)
+    finally:
+        for key, value in env_values.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def _authenticated_client(data_directory):
+    application = _create_test_app(data_directory)
+    store = application.state.investigation_store
+    if not store.has_admin():
+        store.provision_initial_admin(
+            "test-admin",
+            hash_password("test-admin-password"),
+        )
+    client = TestClient(application, base_url="https://testserver")
+    csrf_token = client.get("/auth/csrf").json()["csrf_token"]
+    response = client.post(
+        "/auth/login",
+        headers={
+            "Origin": "http://127.0.0.1:5173",
+            "X-CSRF-Token": csrf_token,
+        },
+        json={
+            "username": "test-admin",
+            "password": "test-admin-password",
+        },
+    )
+    assert response.status_code == 200
+    client.headers.update(
+        {
+            "Origin": "http://127.0.0.1:5173",
+            "X-CSRF-Token": response.json()["csrf_token"],
+        }
+    )
+    return client
+
+
+client = _authenticated_client(_TEST_DATA_DIRECTORY.name)
+atexit.register(client.close)
 
 def load_sample(category):
     return (DATA / category / "sample.log").read_text(encoding="utf-8")
@@ -230,7 +286,7 @@ def test_unknown_investigation():
 
 
 def test_create_list_retrieve_and_update_investigation(tmp_path):
-    test_client = TestClient(create_app(tmp_path))
+    test_client = _authenticated_client(tmp_path)
 
     created = test_client.post(
         "/investigations",
@@ -260,7 +316,7 @@ def test_create_list_retrieve_and_update_investigation(tmp_path):
 
 
 def test_multiple_uploads_are_combined_and_keep_file_metadata(tmp_path):
-    test_client = TestClient(create_app(tmp_path))
+    test_client = _authenticated_client(tmp_path)
     created = test_client.post(
         "/investigations",
         json={"name": "Combined evidence case"}
@@ -315,7 +371,7 @@ def test_multiple_uploads_are_combined_and_keep_file_metadata(tmp_path):
 
 
 def test_investigations_and_evidence_survive_app_reinitialization(tmp_path):
-    first_client = TestClient(create_app(tmp_path))
+    first_client = _authenticated_client(tmp_path)
     created = first_client.post(
         "/investigations",
         json={"name": "Persistent case"}
@@ -335,8 +391,8 @@ def test_investigations_and_evidence_survive_app_reinitialization(tmp_path):
     assert upload.status_code == 200
     baseline_analysis_id = upload.json()["baseline_analysis_id"]
 
-    restored_app = create_app(tmp_path)
-    restored_client = TestClient(restored_app)
+    restored_client = _authenticated_client(tmp_path)
+    restored_app = restored_client.app
     restored = restored_client.get(
         f"/investigations/{investigation_id}"
     )
