@@ -1,9 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
+import { AdminDashboard } from "./AdminDashboard.jsx";
+import {
+  AuthLoadingPage,
+  LoginPage,
+  RequiredPasswordChangePage,
+} from "./AuthPages.jsx";
 import {
   CreateInvestigationModal,
   InvestigationList,
 } from "./InvestigationManagement.jsx";
-import { formatDate, requestJson } from "./investigationApi.js";
+import {
+  formatDate,
+  refreshCsrfToken,
+  requestJson,
+  setCsrfToken,
+} from "./investigationApi.js";
 import "./App.css";
 
 const menuItems = [
@@ -14,6 +25,7 @@ const menuItems = [
   { label: "What-If Simulator", icon: "⇄" },
   { label: "Reports", icon: "▤" },
   { label: "Investigations", icon: "⌕" },
+  { label: "Admin Dashboard", icon: "⚙" },
 ];
 
 const pageNames = menuItems.map((item) => item.label);
@@ -29,6 +41,10 @@ function getInitialPage() {
 
 function App() {
   const [activePage, setActivePage] = useState(getInitialPage);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authNotice, setAuthNotice] = useState("");
+  const [authError, setAuthError] = useState("");
   const [selectedEvidence, setSelectedEvidence] = useState(null);
   const [evidenceRecords, setEvidenceRecords] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -73,6 +89,22 @@ function App() {
   const [simulationComparison, setSimulationComparison] = useState(null);
   const [scenarioId, setScenarioId] = useState(null);
   const [auditHistory, setAuditHistory] = useState([]);
+  const resetWorkspaceData = useCallback(() => {
+    setInvestigation(null);
+    setAnalysisResult(null);
+    setEvidenceRecords([]);
+    setFindingsData(null);
+    setAnomaliesData(null);
+    setInvestigationSummary(null);
+    setTimelineRecords([]);
+    setGraphData({ nodes: [], edges: [] });
+    setSimulationResult(null);
+    setSimulationComparison(null);
+    setScenarioId(null);
+    setAuditHistory([]);
+    setSelectedEvidenceId("");
+    setSelectedEvidence(null);
+  }, []);
   // Prepare actual evidence records received from the backend.
   const filteredEvidence = evidenceRecords.map((record) => ({
     id: record.evidence_id,
@@ -118,6 +150,92 @@ function App() {
       setInvestigationsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const restoreSession = async () => {
+      try {
+        await refreshCsrfToken();
+        const user = await requestJson("/auth/me");
+        if (active) {
+          setCurrentUser(user);
+          setAuthError("");
+        }
+      } catch (error) {
+        if (active) {
+          setCurrentUser(null);
+          setAuthError(error.status === 401 ? "" : error.message);
+        }
+      } finally {
+        if (active) {
+          setAuthReady(true);
+        }
+      }
+    };
+    restoreSession();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setCurrentUser(null);
+      setAuthReady(true);
+      setAuthNotice("Your session expired. Sign in again to continue.");
+      setAuthError("");
+      setCsrfToken("");
+      resetWorkspaceData();
+    };
+    window.addEventListener("tattva:session-expired", handleSessionExpired);
+    return () =>
+      window.removeEventListener(
+        "tattva:session-expired",
+        handleSessionExpired
+      );
+  }, [resetWorkspaceData]);
+
+  const handleLogin = async (username, password) => {
+    const result = await requestJson("/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    setCsrfToken(result.csrf_token);
+    setCurrentUser(result.user);
+    setAuthError("");
+    setAuthNotice("");
+  };
+
+  const handlePasswordChange = async (currentPassword, newPassword) => {
+    await requestJson("/auth/password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
+    setCsrfToken("");
+    setCurrentUser(null);
+    setAuthNotice("Password changed. Sign in with your new password.");
+  };
+
+  const handleLogout = async () => {
+    try {
+      await requestJson("/auth/logout", { method: "POST" });
+    } catch (error) {
+      if (error.status !== 401) {
+        setAuthError(error.message);
+      }
+    } finally {
+      setCsrfToken("");
+      setCurrentUser(null);
+      setAuthReady(true);
+      setAuthNotice("You have been signed out.");
+      resetWorkspaceData();
+    }
+  };
 
   const loadInvestigation = useCallback(async (id) => {
     setWorkspaceLoading(true);
@@ -222,8 +340,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    Promise.resolve().then(refreshInvestigations);
-  }, [refreshInvestigations]);
+    if (authReady && currentUser && !currentUser.password_change_required) {
+      Promise.resolve().then(refreshInvestigations);
+    }
+  }, [authReady, currentUser, refreshInvestigations]);
 
   useEffect(() => {
     try {
@@ -234,6 +354,9 @@ function App() {
   }, [activePage]);
 
   useEffect(() => {
+    if (!authReady || !currentUser || currentUser.password_change_required) {
+      return;
+    }
     if (investigationId) {
       try {
         window.localStorage.setItem(
@@ -263,7 +386,7 @@ function App() {
         // The application can continue without browser storage.
       }
     }
-  }, [investigationId, loadInvestigation]);
+  }, [authReady, currentUser, investigationId, loadInvestigation]);
 
   const openInvestigation = useCallback(
     (id) => {
@@ -367,7 +490,7 @@ function App() {
 
     try {
       // 1. Create a scenario
-      const createResponse = await fetch("/api/simulations", {
+      const createdScenario = await requestJson("/api/simulations", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -380,14 +503,6 @@ function App() {
         }),
       });
 
-      const createdScenario = await createResponse.json();
-
-      if (!createResponse.ok) {
-        throw new Error(
-          createdScenario.detail || "Could not create simulation scenario."
-        );
-      }
-
       const newScenarioId = createdScenario.scenario_id;
 
       if (!newScenarioId) {
@@ -397,7 +512,7 @@ function App() {
       setScenarioId(newScenarioId);
 
       // 2. Exclude the selected evidence
-      const excludeResponse = await fetch(
+      await requestJson(
         `/api/simulations/${newScenarioId}/exclude`,
         {
           method: "POST",
@@ -410,58 +525,26 @@ function App() {
         }
       );
 
-      const excludeData = await excludeResponse.json();
-
-      if (!excludeResponse.ok) {
-        throw new Error(
-          excludeData.detail || "Could not exclude selected evidence."
-        );
-      }
-
       // 3. Run the simulation
-      const runResponse = await fetch(
+      const runData = await requestJson(
         `/api/simulations/${newScenarioId}/run`,
         {
           method: "POST",
         }
       );
 
-      const runData = await runResponse.json();
-
-      if (!runResponse.ok) {
-        throw new Error(
-          runData.detail || "Simulation execution failed."
-        );
-      }
-
       setSimulationResult(runData.result);
 
       // 4. Compare simulated result with original baseline
-      const compareResponse = await fetch(
+      const compareData = await requestJson(
         `/api/simulations/${newScenarioId}/compare`
       );
 
-      const compareData = await compareResponse.json();
-
-      if (!compareResponse.ok) {
-        throw new Error(
-          compareData.detail || "Could not compare simulation results."
-        );
-      }
-
       setSimulationComparison(compareData);
       // 5. Fetch scenario audit history
-      const historyResponse = await fetch(
+      const historyData = await requestJson(
         `/api/simulations/${newScenarioId}/history`
       );
-
-      const historyData = await historyResponse.json();
-
-      if (!historyResponse.ok) {
-        throw new Error(
-          historyData.detail || "Could not fetch audit history."
-        );
-      }
 
       setAuditHistory(
         Array.isArray(historyData)
@@ -505,6 +588,47 @@ function App() {
     anomaliesData?.anomalies?.length ??
     analysisResult?.anomaly_detection?.anomaly_count ??
     0;
+  const visibleMenuItems = menuItems.filter((item) => {
+    if (item.label === "Admin Dashboard") {
+      return currentUser?.role === "ADMIN";
+    }
+    if (item.label === "What-If Simulator") {
+      return currentUser?.role !== "VIEWER";
+    }
+    return true;
+  });
+  const effectivePage = visibleMenuItems.some(
+    (item) => item.label === activePage
+  )
+    ? activePage
+    : "Dashboard";
+  const canUploadEvidence = [
+    "ADMIN",
+    "LEAD_INVESTIGATOR",
+    "INVESTIGATOR",
+  ].includes(currentUser?.role);
+
+  if (!authReady) {
+    return <AuthLoadingPage />;
+  }
+  if (!currentUser) {
+    return (
+      <LoginPage
+        onLogin={handleLogin}
+        notice={authNotice}
+        connectionError={authError}
+      />
+    );
+  }
+  if (currentUser.password_change_required) {
+    return (
+      <RequiredPasswordChangePage
+        username={currentUser.username}
+        onSubmit={handlePasswordChange}
+        onLogout={handleLogout}
+      />
+    );
+  }
 
   return (
     <div className="app-container">
@@ -521,11 +645,11 @@ function App() {
         <p className="menu-heading">WORKSPACE</p>
 
         <nav>
-          {menuItems.map((item) => (
+          {visibleMenuItems.map((item) => (
             <button
               key={item.label}
               className={`nav-item ${
-                activePage === item.label ? "active" : ""
+                effectivePage === item.label ? "active" : ""
               }`}
               onClick={() => setActivePage(item.label)}
             >
@@ -536,11 +660,13 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="user-avatar">TF</div>
+          <div className="user-avatar">
+            {currentUser.username.slice(0, 1).toUpperCase()}
+          </div>
 
           <div>
-            <strong>Investigation Team</strong>
-            <small>Workspace Member</small>
+            <strong>{currentUser.username}</strong>
+            <small>{currentUser.role.replaceAll("_", " ")}</small>
           </div>
         </div>
       </aside>
@@ -548,14 +674,14 @@ function App() {
       <main className="main-content">
         <header className="topbar">
           <div className="topbar-title">
-            {investigation && activePage !== "Investigations" && (
+            {investigation && effectivePage !== "Investigations" && (
               <div
                 className={`selected-investigation-context ${
-                  activePage === "Dashboard" ? "dashboard-context" : ""
+                  effectivePage === "Dashboard" ? "dashboard-context" : ""
                 }`}
               >
                 <span className="eyebrow">
-                  {activePage === "Dashboard"
+                  {effectivePage === "Dashboard"
                     ? "ACTIVE INVESTIGATION"
                     : "SELECTED INVESTIGATION"}
                 </span>
@@ -564,26 +690,36 @@ function App() {
               </div>
             )}
             <span className="eyebrow">
-              {activePage === "Investigations"
+              {effectivePage === "Investigations"
                 ? "CASE MANAGEMENT"
-                : activePage === "Dashboard"
+                : effectivePage === "Dashboard"
                   ? "CASE OVERVIEW"
                   : "INVESTIGATION WORKSPACE"}
             </span>
-            <h1>{activePage}</h1>
+            <h1>{effectivePage}</h1>
           </div>
-          {activePage !== "Investigations" && (
+          <div className="topbar-actions">
+            {effectivePage !== "Investigations" && (
+              <button
+                className="secondary-button"
+                onClick={() => setActivePage("Investigations")}
+              >
+                All Investigations
+              </button>
+            )}
             <button
               className="secondary-button"
-              onClick={() => setActivePage("Investigations")}
+              onClick={handleLogout}
             >
-              All Investigations
+              Sign out
             </button>
-          )}
+          </div>
         </header>
 
         {/* DASHBOARD */}
-        {activePage === "Dashboard" ? (
+        {effectivePage === "Admin Dashboard" ? (
+          <AdminDashboard />
+        ) : effectivePage === "Dashboard" ? (
           !investigation ? (
             <section className="management-card management-empty dashboard-empty">
               {workspaceLoading ? (
@@ -733,7 +869,7 @@ function App() {
               </div>
             </>
           )
-        ) : activePage === "Investigations" ? (
+        ) : effectivePage === "Investigations" ? (
           <InvestigationList
             investigations={investigations}
             loading={investigationsLoading}
@@ -741,6 +877,7 @@ function App() {
             onRetry={refreshInvestigations}
             onOpen={openInvestigation}
             onCreate={() => setShowCreateModal(true)}
+            canCreate={currentUser.role === "ADMIN"}
           />
         ) : !investigation ? (
           <section className="management-card management-empty">
@@ -761,7 +898,7 @@ function App() {
                   </p>
                 ) : (
                   <p>
-                    Open an investigation before using {activePage}.
+                    Open an investigation before using {effectivePage}.
                   </p>
                 )}
                 {investigationId && workspaceError && (
@@ -783,7 +920,7 @@ function App() {
               </>
             )}
           </section>
-        ) : activePage === "Evidence Explorer" ? (
+        ) : effectivePage === "Evidence Explorer" ? (
           /* EVIDENCE EXPLORER */
           <section className="evidence-page">
             <div className="page-heading">
@@ -818,54 +955,66 @@ function App() {
               </p>
             )}
 
-            <div className="information-card">
-              <p>
-                Add evidence to this investigation. New files are analyzed
-                together with its existing evidence.
-              </p>
-              <form
-                className="workspace-upload-form evidence-upload-form"
-                onSubmit={handleEvidenceUpload}
-              >
-                <label>
-                  Evidence file
-                  <input
-                    key={evidenceInputKey}
-                    type="file"
-                    accept=".log,.txt,.csv,.json"
-                    onChange={(event) =>
-                      setSelectedFile(event.target.files?.[0] || null)
-                    }
-                    disabled={evidenceUploading}
-                  />
-                </label>
-                <label>
-                  Source type
-                  <select
-                    value={sourceType}
-                    onChange={(event) => setSourceType(event.target.value)}
-                    disabled={evidenceUploading}
-                  >
-                    <option value="authentication">Authentication</option>
-                    <option value="file">File Activity</option>
-                    <option value="network">Network</option>
-                    <option value="archive">Archive</option>
-                  </select>
-                </label>
-                <button
-                  className="primary-button"
-                  type="submit"
-                  disabled={!selectedFile || evidenceUploading}
-                >
-                  {evidenceUploading ? "Analyzing evidence..." : "Add Evidence"}
-                </button>
-              </form>
-              {evidenceUploading && (
-                <p className="upload-progress" role="status">
-                  Uploading and analyzing combined investigation evidence...
+            {canUploadEvidence ? (
+              <div className="information-card">
+                <p>
+                  Add evidence to this investigation. New files are analyzed
+                  together with its existing evidence.
                 </p>
-              )}
-            </div>
+                <form
+                  className="workspace-upload-form evidence-upload-form"
+                  onSubmit={handleEvidenceUpload}
+                >
+                  <label>
+                    Evidence file
+                    <input
+                      key={evidenceInputKey}
+                      type="file"
+                      accept=".log,.txt,.csv,.json"
+                      onChange={(event) =>
+                        setSelectedFile(event.target.files?.[0] || null)
+                      }
+                      disabled={evidenceUploading}
+                    />
+                  </label>
+                  <label>
+                    Source type
+                    <select
+                      value={sourceType}
+                      onChange={(event) => setSourceType(event.target.value)}
+                      disabled={evidenceUploading}
+                    >
+                      <option value="authentication">Authentication</option>
+                      <option value="file">File Activity</option>
+                      <option value="network">Network</option>
+                      <option value="archive">Archive</option>
+                    </select>
+                  </label>
+                  <button
+                    className="primary-button"
+                    type="submit"
+                    disabled={!selectedFile || evidenceUploading}
+                  >
+                    {evidenceUploading
+                      ? "Analyzing evidence..."
+                      : "Add Evidence"}
+                  </button>
+                </form>
+                {evidenceUploading && (
+                  <p className="upload-progress" role="status">
+                    Uploading and analyzing combined investigation evidence...
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="information-card">
+                <h3>Read-only access</h3>
+                <p>
+                  Your Viewer role allows you to review evidence but not upload
+                  or modify it.
+                </p>
+              </div>
+            )}
 
             <div className="information-card evidence-files-card">
               <h3>Evidence Files</h3>
@@ -932,7 +1081,7 @@ function App() {
               </table>
             </div>
           </section>
-        ) : activePage === "Incident Timeline" ? (
+        ) : effectivePage === "Incident Timeline" ? (
           /* INCIDENT TIMELINE - REAL BACKEND DATA */
           <section className="timeline-page">
             <div className="page-heading">
@@ -1017,7 +1166,7 @@ function App() {
               )}
             </div>
           </section>
-        ) : activePage === "Evidence Graph" ? (
+        ) : effectivePage === "Evidence Graph" ? (
           /* EVIDENCE GRAPH - REAL BACKEND DATA */
           <section className="graph-page">
             <div className="page-heading">
@@ -1216,7 +1365,7 @@ function App() {
               </div>
             </div>
           </section>
-        ) : activePage === "What-If Simulator" ? (
+        ) : effectivePage === "What-If Simulator" ? (
           <section className="welcome-card">
             <div style={{ width: "100%" }}>
               <span className="eyebrow">
@@ -1473,7 +1622,7 @@ function App() {
               )}
             </div>
           </section>
-               ) : activePage === "Reports" ? (
+               ) : effectivePage === "Reports" ? (
           <section className="welcome-card">
             <div style={{ width: "100%" }}>
               <span className="eyebrow">
@@ -1767,7 +1916,7 @@ function App() {
                 TATTVA FORENSICS WORKSPACE
               </span>
 
-              <h2>{activePage}</h2>
+              <h2>{effectivePage}</h2>
 
               <p>
                 This module is being prepared. Its interface and

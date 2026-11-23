@@ -1,20 +1,32 @@
+import { env } from 'node:process'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+
+const backendTarget =
+  env.TATTVA_BACKEND_URL || 'http://127.0.0.1:8000'
 
 export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: backendTarget,
         changeOrigin: true,
       },
       '/analyze': {
-        target: 'http://127.0.0.1:8000',
+        target: backendTarget,
+        changeOrigin: true,
+      },
+      '/auth': {
+        target: backendTarget,
+        changeOrigin: true,
+      },
+      '/users': {
+        target: backendTarget,
         changeOrigin: true,
       },
       '/investigations': {
-        target: 'http://127.0.0.1:8000',
+        target: backendTarget,
         changeOrigin: true,
       },
     },

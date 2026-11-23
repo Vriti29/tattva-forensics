@@ -115,6 +115,7 @@ export function InvestigationList({
   onRetry,
   onOpen,
   onCreate,
+  canCreate = false,
 }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -143,9 +144,11 @@ export function InvestigationList({
           <h2>All Investigations</h2>
           <p>Search, review, and open investigation dashboards.</p>
         </div>
-        <button className="primary-button" onClick={onCreate}>
-          + New Investigation
-        </button>
+        {canCreate && (
+          <button className="primary-button" onClick={onCreate}>
+            + New Investigation
+          </button>
+        )}
       </div>
 
       <div className="management-card">
@@ -192,9 +195,11 @@ export function InvestigationList({
           <div className="management-empty">
             <h3>No investigations yet</h3>
             <p>Create an investigation to start organizing evidence and analysis.</p>
-            <button className="primary-button" onClick={onCreate}>
-              Create Investigation
-            </button>
+            {canCreate && (
+              <button className="primary-button" onClick={onCreate}>
+                Create Investigation
+              </button>
+            )}
           </div>
         ) : visibleInvestigations.length === 0 ? (
           <p className="management-state">No investigations match these filters.</p>
