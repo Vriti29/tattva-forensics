@@ -14,6 +14,13 @@ files to `POST /investigations/{investigation_id}/evidence` using multipart
 fields `file` and `source_type`. The legacy `POST /analyze` endpoint remains
 available and creates a new investigation for each upload.
 
+Evidence timestamps with explicit offsets are normalized to UTC for analysis;
+their original strings are retained as `original_timestamp`. Timestamps without
+offsets remain timezone-unspecified wall-clock values and are never assumed to
+be UTC. An analysis that mixes offset-aware and offset-free timestamps is
+rejected until explicit offsets are supplied, because their ordering cannot be
+established safely.
+
 ## Authentication foundation
 
 The backend applies versioned SQLite migrations at startup. Existing

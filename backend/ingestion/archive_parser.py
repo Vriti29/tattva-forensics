@@ -1,6 +1,7 @@
 
 import re
-from datetime import datetime
+
+from backend.normalization.timestamp_handler import normalize_timestamp
 
 def parse_archive_log(content):
     records = []
@@ -19,7 +20,7 @@ def parse_archive_log(content):
 
             date, time, event, user, archive_id, path, size, host = match.groups()
             timestamp = f"{date} {time}"
-            datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+            normalize_timestamp(timestamp)
 
             if event not in allowed_events:
                 raise ValueError(f"Unknown event type: {event}")

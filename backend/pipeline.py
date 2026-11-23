@@ -8,6 +8,11 @@ from backend.ingestion.network_parser import parse_network_log
 from backend.ingestion.archive_parser import parse_archive_log
 
 from backend.normalization.normalizer import normalize_records
+from backend.normalization.timestamp_handler import (
+    ensure_compatible_timestamps,
+    normalize_timestamp,
+    original_timestamp,
+)
 from backend.integrity.hashing import calculate_record_hash
 from backend.integrity.evidence_metadata import create_evidence_metadata
 from backend.detection.rule_engine import run_detection
@@ -20,6 +25,21 @@ PARSERS = {
     "network": parse_network_log,
     "archive": parse_archive_log
 }
+
+
+def _raise_invalid_timestamp_errors(errors, stage):
+    for error in errors:
+        message = error.get("error", "")
+        if message.startswith("Invalid timestamp"):
+            location = error.get(
+                "record_number",
+                error.get("line_number", "unknown"),
+            )
+            raise ValueError(
+                f"Timestamp validation failed in {stage} record "
+                f"{location}: {message}"
+            )
+
 
 def process_evidence_file(
     file_path,
@@ -53,11 +73,17 @@ def process_evidence_file(
     else:
         parser_result = PARSERS[source_type](content)
 
+    _raise_invalid_timestamp_errors(parser_result["errors"], "input")
+
     # 3. Normalize parsed records
     normalization_result = normalize_records(
         parser_result["records"],
         source_id=source_id,
         evidence_id_prefix=evidence_id_prefix
+    )
+    _raise_invalid_timestamp_errors(
+        normalization_result["errors"],
+        "normalized",
     )
 
     records = normalization_result["records"]
@@ -93,11 +119,25 @@ def analyze_evidence_records(records):
     """Run the forensic engines over a combined set of evidence records."""
     from backend.normalization.schemas import EvidenceRecord
 
+    prepared_records = []
+    for record in records:
+        data = (
+            record.model_dump(mode="python")
+            if isinstance(record, EvidenceRecord)
+            else dict(record)
+        )
+        raw_timestamp = data.get("timestamp")
+        if not data.get("original_timestamp"):
+            data["original_timestamp"] = original_timestamp(raw_timestamp)
+        data["timestamp"] = normalize_timestamp(raw_timestamp)
+        prepared_records.append(EvidenceRecord.model_validate(data))
+
+    normalized_timestamps = ensure_compatible_timestamps(
+        [record.timestamp for record in prepared_records]
+    )
     prepared_records = [
-        EvidenceRecord.model_validate(record)
-        if not isinstance(record, EvidenceRecord)
-        else record
-        for record in records
+        record.model_copy(update={"timestamp": timestamp})
+        for record, timestamp in zip(prepared_records, normalized_timestamps)
     ]
 
     return {

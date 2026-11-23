@@ -1,5 +1,5 @@
 
-from .timestamp_handler import normalize_timestamp
+from .timestamp_handler import normalize_timestamp, original_timestamp
 from .event_mapper import map_event_type
 from .validators import validate_evidence
 
@@ -15,6 +15,9 @@ def normalize_records(
     for index, record in enumerate(records):
         try:
             original_event = record["original_event_type"]
+            raw_timestamp = record.get("timestamp")
+            if raw_timestamp is None:
+                raise ValueError("Invalid timestamp: value is required")
 
             evidence = {
                 **record,
@@ -24,7 +27,8 @@ def normalize_records(
                     else f"EV-{starting_id + index:04d}"
                 ),
                 "source_id": source_id,
-                "timestamp": normalize_timestamp(record["timestamp"]),
+                "original_timestamp": original_timestamp(raw_timestamp),
+                "timestamp": normalize_timestamp(raw_timestamp),
                 "event_type": map_event_type(original_event),
                 "ip_address": record.get("ip_address") or record.get("source_ip")
             }

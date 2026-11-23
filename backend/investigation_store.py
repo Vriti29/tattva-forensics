@@ -65,6 +65,11 @@ class InvestigationStore:
                     (1, "investigation_storage", self._migration_1),
                     (2, "identity_and_audit_foundation", self._migration_2),
                     (3, "login_attempt_rate_limits", self._migration_3),
+                    (
+                        4,
+                        "login_attempt_scope_compatibility",
+                        self._migration_4,
+                    ),
                 )
                 applied_versions = {
                     row["version"]
@@ -273,6 +278,72 @@ class InvestigationStore:
         connection.execute(
             """
             CREATE INDEX IF NOT EXISTS login_attempt_buckets_window_idx
+            ON login_attempt_buckets(window_started_at)
+            """
+        )
+
+    @staticmethod
+    def _migration_4(connection):
+        table = connection.execute(
+            """
+            SELECT sql FROM sqlite_master
+            WHERE type = 'table' AND name = 'login_attempt_buckets'
+            """
+        ).fetchone()
+        if table is None:
+            InvestigationStore._migration_3(connection)
+            return
+
+        schema = " ".join(table["sql"].casefold().split())
+        if "'account_source'" in schema:
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS login_attempt_buckets_window_idx
+                ON login_attempt_buckets(window_started_at)
+                """
+            )
+            return
+
+        connection.execute(
+            """
+            ALTER TABLE login_attempt_buckets
+            RENAME TO login_attempt_buckets_legacy_v3
+            """
+        )
+        connection.execute("DROP INDEX IF EXISTS login_attempt_buckets_window_idx")
+        connection.execute(
+            """
+            CREATE TABLE login_attempt_buckets (
+                scope TEXT NOT NULL CHECK (
+                    scope IN ('account_source', 'source')
+                ),
+                bucket_hash TEXT NOT NULL,
+                attempt_count INTEGER NOT NULL CHECK (attempt_count > 0),
+                window_started_at TEXT NOT NULL,
+                PRIMARY KEY (scope, bucket_hash)
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO login_attempt_buckets (
+                scope, bucket_hash, attempt_count, window_started_at
+            )
+            SELECT
+                CASE scope
+                    WHEN 'account' THEN 'account_source'
+                    ELSE scope
+                END,
+                bucket_hash,
+                attempt_count,
+                window_started_at
+            FROM login_attempt_buckets_legacy_v3
+            """
+        )
+        connection.execute("DROP TABLE login_attempt_buckets_legacy_v3")
+        connection.execute(
+            """
+            CREATE INDEX login_attempt_buckets_window_idx
             ON login_attempt_buckets(window_started_at)
             """
         )

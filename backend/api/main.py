@@ -25,6 +25,7 @@ from backend.auth.security import (
     require_roles,
 )
 from backend.investigation_store import InvestigationStore
+from backend.normalization.timestamp_handler import sort_records_by_timestamp
 from backend.pipeline import analyze_evidence_records, process_evidence_file
 from backend.simulation.forensic_adapter import (
     analyze_evidence as run_forensic_analysis
@@ -526,10 +527,10 @@ def create_app(data_directory=None):
         _user=Depends(require_investigation_access("read")),
     ):
         result = get_cached_analysis(investigation_id, request)
-        timeline = sorted(
-            result["evidence_records"],
-            key=lambda record: record["timestamp"]
-        )
+        try:
+            timeline = sort_records_by_timestamp(result["evidence_records"])
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
         return {
             "investigation_id": investigation_id,
             "total_events": len(timeline),

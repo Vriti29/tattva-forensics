@@ -2,6 +2,8 @@ import csv
 import json
 import io
 
+from backend.normalization.timestamp_handler import normalize_timestamp
+
 NUMERIC_FIELDS = {"transfer_size_bytes", "archive_size_bytes"}
 
 def parse_structured_content(content, source_type, file_format):
@@ -44,10 +46,11 @@ def parse_structured_content(content, source_type, file_format):
             event = record.get("original_event_type") or record.get("event_type")
 
             if not timestamp:
-                raise ValueError("Missing timestamp")
+                raise ValueError("Invalid timestamp: value is required")
             if not event:
                 raise ValueError("Missing event type")
 
+            normalize_timestamp(timestamp)
             record["timestamp"] = timestamp
             record["original_event_type"] = str(event).upper()
             record["source_type"] = source_type
