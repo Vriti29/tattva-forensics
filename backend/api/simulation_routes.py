@@ -2,9 +2,14 @@ from typing import Optional
 from datetime import datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, ConfigDict
 
+from backend.auth.security import (
+    authorize_investigation,
+    get_current_user,
+    has_investigation_assignment,
+)
 
 router = APIRouter(
     prefix="/api/simulations",
@@ -106,6 +111,24 @@ def get_scenario_or_404(service, scenario_id):
         )
 
 
+def _record_simulation_audit(
+    request,
+    user,
+    scenario,
+    action,
+    evidence_id=None,
+    details=None,
+):
+    request.app.state.investigation_store.append_audit_event(
+        action=f"SIMULATOR_{action}",
+        actor_user_id=user["user_id"],
+        investigation_id=scenario.investigation_id,
+        evidence_id=evidence_id,
+        target_id=scenario.scenario_id,
+        metadata=details or {},
+    )
+
+
 # ==========================================
 # 1. CREATE SCENARIO
 # ==========================================
@@ -113,10 +136,18 @@ def get_scenario_or_404(service, scenario_id):
 @router.post("", status_code=201)
 def create_scenario(
     data: CreateScenarioRequest,
-    request: Request
+    request: Request,
+    user=Depends(get_current_user),
 ):
 
     service = get_service(request)
+
+    authorize_investigation(
+        request,
+        user,
+        data.investigation_id,
+        permission="simulate",
+    )
 
     evidence_store = get_evidence_store(request)
 
@@ -163,7 +194,18 @@ def create_scenario(
             data.baseline_analysis_id,
             data.scenario_name,
             data.description,
-            evidence_ids
+            evidence_ids,
+            actor_user_id=user["user_id"],
+        )
+        _record_simulation_audit(
+            request,
+            user,
+            scenario,
+            "SCENARIO_CREATED",
+            details={
+                "baseline_analysis_id": scenario.baseline_analysis_id,
+                "scenario_name": scenario.scenario_name,
+            },
         )
 
         return scenario.model_dump(mode="json")
@@ -181,13 +223,19 @@ def create_scenario(
 # ==========================================
 
 @router.get("")
-def list_scenarios(request: Request):
+def list_scenarios(request: Request, user=Depends(get_current_user)):
 
     service = get_service(request)
 
     return [
         item.model_dump(mode="json")
         for item in service.scenario_manager.list_scenarios()
+        if user["role"] == "ADMIN"
+        or has_investigation_assignment(
+            request,
+            user,
+            item.investigation_id,
+        )
     ]
 
 
@@ -198,7 +246,8 @@ def list_scenarios(request: Request):
 @router.get("/{scenario_id}")
 def get_scenario(
     scenario_id: str,
-    request: Request
+    request: Request,
+    user=Depends(get_current_user),
 ):
 
     service = get_service(request)
@@ -206,6 +255,11 @@ def get_scenario(
     scenario = get_scenario_or_404(
         service,
         scenario_id
+    )
+    authorize_investigation(
+        request,
+        user,
+        scenario.investigation_id,
     )
 
     return {
@@ -242,18 +296,33 @@ def get_scenario(
 def exclude_event(
     scenario_id: str,
     data: ExcludeEventRequest,
-    request: Request
+    request: Request,
+    user=Depends(get_current_user),
 ):
 
     service = get_service(request)
 
-    get_scenario_or_404(service, scenario_id)
+    scenario = get_scenario_or_404(service, scenario_id)
+    authorize_investigation(
+        request,
+        user,
+        scenario.investigation_id,
+        permission="simulate",
+    )
 
     try:
 
         result = service.exclude_event(
             scenario_id,
-            data.evidence_id
+            data.evidence_id,
+            actor_user_id=user["user_id"],
+        )
+        _record_simulation_audit(
+            request,
+            user,
+            scenario,
+            "EVENT_EXCLUDED",
+            evidence_id=data.evidence_id,
         )
 
         return {
@@ -277,12 +346,19 @@ def exclude_event(
 def modify_timestamp(
     scenario_id: str,
     data: ModifyTimestampRequest,
-    request: Request
+    request: Request,
+    user=Depends(get_current_user),
 ):
 
     service = get_service(request)
 
-    get_scenario_or_404(service, scenario_id)
+    scenario = get_scenario_or_404(service, scenario_id)
+    authorize_investigation(
+        request,
+        user,
+        scenario.investigation_id,
+        permission="simulate",
+    )
 
     try:
 
@@ -290,7 +366,19 @@ def modify_timestamp(
             scenario_id,
             data.evidence_id,
             data.original_value.isoformat(),
-            data.simulated_value.isoformat()
+            data.simulated_value.isoformat(),
+            actor_user_id=user["user_id"],
+        )
+        _record_simulation_audit(
+            request,
+            user,
+            scenario,
+            "TIMESTAMP_MODIFIED",
+            evidence_id=data.evidence_id,
+            details={
+                "original_value": data.original_value.isoformat(),
+                "simulated_value": data.simulated_value.isoformat(),
+            },
         )
 
         return {
@@ -313,7 +401,8 @@ def modify_timestamp(
 @router.post("/{scenario_id}/run")
 def run_simulation(
     scenario_id: str,
-    request: Request
+    request: Request,
+    user=Depends(get_current_user),
 ):
 
     service = get_service(request)
@@ -325,6 +414,12 @@ def run_simulation(
     scenario = get_scenario_or_404(
         service,
         scenario_id
+    )
+    authorize_investigation(
+        request,
+        user,
+        scenario.investigation_id,
+        permission="simulate",
     )
 
     if scenario.investigation_id not in evidence_store:
@@ -346,7 +441,14 @@ def run_simulation(
         result = service.run_simulation(
             scenario_id,
             evidence_store[scenario.investigation_id],
-            baseline_store[scenario.baseline_analysis_id]
+            baseline_store[scenario.baseline_analysis_id],
+            actor_user_id=user["user_id"],
+        )
+        _record_simulation_audit(
+            request,
+            user,
+            scenario,
+            "SIMULATION_EXECUTED",
         )
 
         return {
@@ -369,7 +471,8 @@ def run_simulation(
 @router.get("/{scenario_id}/compare")
 def compare_results(
     scenario_id: str,
-    request: Request
+    request: Request,
+    user=Depends(get_current_user),
 ):
 
     service = get_service(request)
@@ -379,6 +482,11 @@ def compare_results(
     scenario = get_scenario_or_404(
         service,
         scenario_id
+    )
+    authorize_investigation(
+        request,
+        user,
+        scenario.investigation_id,
     )
 
     baseline = baseline_store.get(
@@ -394,10 +502,18 @@ def compare_results(
 
     try:
 
-        return service.compare_results(
+        result = service.compare_results(
             scenario_id,
-            baseline
+            baseline,
+            actor_user_id=user["user_id"],
         )
+        _record_simulation_audit(
+            request,
+            user,
+            scenario,
+            "COMPARISON_GENERATED",
+        )
+        return result
 
     except ValueError as error:
 
@@ -414,12 +530,18 @@ def compare_results(
 @router.get("/{scenario_id}/history")
 def get_audit_history(
     scenario_id: str,
-    request: Request
+    request: Request,
+    user=Depends(get_current_user),
 ):
 
     service = get_service(request)
 
-    get_scenario_or_404(service, scenario_id)
+    scenario = get_scenario_or_404(service, scenario_id)
+    authorize_investigation(
+        request,
+        user,
+        scenario.investigation_id,
+    )
 
     history = service.audit_manager.get_history(
         scenario_id
@@ -438,16 +560,32 @@ def get_audit_history(
 @router.post("/{scenario_id}/reset")
 def reset_scenario(
     scenario_id: str,
-    request: Request
+    request: Request,
+    user=Depends(get_current_user),
 ):
 
     service = get_service(request)
 
-    get_scenario_or_404(service, scenario_id)
+    scenario = get_scenario_or_404(service, scenario_id)
+    authorize_investigation(
+        request,
+        user,
+        scenario.investigation_id,
+        permission="simulate",
+    )
 
     try:
 
-        result = service.reset_scenario(scenario_id)
+        result = service.reset_scenario(
+            scenario_id,
+            actor_user_id=user["user_id"],
+        )
+        _record_simulation_audit(
+            request,
+            user,
+            scenario,
+            "SCENARIO_RESET",
+        )
 
         return {
             "message": "Scenario reset successfully",
@@ -469,16 +607,32 @@ def reset_scenario(
 @router.post("/{scenario_id}/discard")
 def discard_scenario(
     scenario_id: str,
-    request: Request
+    request: Request,
+    user=Depends(get_current_user),
 ):
 
     service = get_service(request)
 
-    get_scenario_or_404(service, scenario_id)
+    scenario = get_scenario_or_404(service, scenario_id)
+    authorize_investigation(
+        request,
+        user,
+        scenario.investigation_id,
+        permission="simulate",
+    )
 
     try:
 
-        result = service.discard_scenario(scenario_id)
+        result = service.discard_scenario(
+            scenario_id,
+            actor_user_id=user["user_id"],
+        )
+        _record_simulation_audit(
+            request,
+            user,
+            scenario,
+            "SCENARIO_DISCARDED",
+        )
 
         return {
             "message": "Scenario discarded successfully",

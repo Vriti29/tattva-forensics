@@ -1,0 +1,636 @@
+import hashlib
+import json
+import shutil
+import sqlite3
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from backend.auth.passwords import hash_password, verify_password
+from backend.investigation_store import InvestigationStore
+from backend.provision_admin import main as provision_admin_main
+
+
+BACKEND_ROOT = Path(__file__).resolve().parent
+LIVE_DATABASE = BACKEND_ROOT / "data" / "investigations.sqlite3"
+
+
+def _create_legacy_database(database_path):
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.executescript(
+            """
+            CREATE TABLE investigations (
+                investigation_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                status TEXT NOT NULL,
+                analysis_json TEXT,
+                baseline_analysis_id TEXT,
+                baseline_analysis_json TEXT
+            );
+            CREATE TABLE evidence_files (
+                file_id TEXT PRIMARY KEY,
+                investigation_id TEXT NOT NULL,
+                source_id TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                metadata_json TEXT NOT NULL,
+                analysis_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (investigation_id)
+                    REFERENCES investigations(investigation_id)
+            );
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO investigations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "INV-LEGACY-1",
+                "Legacy case",
+                "Preserve this record",
+                "2026-01-01T00:00:00+00:00",
+                "2026-01-02T00:00:00+00:00",
+                "open",
+                '{"analysis":"preserved"}',
+                "BASELINE-1",
+                '{"baseline":"preserved"}',
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO evidence_files VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "FILE-LEGACY-1",
+                "INV-LEGACY-1",
+                "SOURCE-LEGACY-1",
+                "original evidence.log",
+                json.dumps(
+                    {
+                        "file_path": "evidence/INV-LEGACY-1/file.log",
+                        "sha256": "a" * 64,
+                    }
+                ),
+                '{"findings":["preserved"]}',
+                "2026-01-02T00:00:00+00:00",
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def _read_legacy_rows(database_path):
+    connection = sqlite3.connect(database_path)
+    try:
+        investigations = connection.execute(
+            "SELECT * FROM investigations ORDER BY investigation_id"
+        ).fetchall()
+        evidence = connection.execute(
+            """
+            SELECT file_id, investigation_id, source_id, filename,
+                metadata_json, analysis_json, created_at
+            FROM evidence_files ORDER BY file_id
+            """
+        ).fetchall()
+        return investigations, evidence
+    finally:
+        connection.close()
+
+
+def _create_v3_auth_database(database_path):
+    connection = sqlite3.connect(database_path)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    try:
+        connection.execute(
+            """
+            CREATE TABLE schema_migrations (
+                version INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TEXT NOT NULL
+            )
+            """
+        )
+        InvestigationStore._migration_1(connection)
+        InvestigationStore._migration_2(connection)
+        connection.execute(
+            """
+            CREATE TABLE login_attempt_buckets (
+                scope TEXT NOT NULL CHECK (scope IN ('account', 'source')),
+                bucket_hash TEXT NOT NULL,
+                attempt_count INTEGER NOT NULL CHECK (attempt_count > 0),
+                window_started_at TEXT NOT NULL,
+                PRIMARY KEY (scope, bucket_hash)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX login_attempt_buckets_window_idx
+            ON login_attempt_buckets(window_started_at)
+            """
+        )
+
+        created_at = "2026-01-01T00:00:00+00:00"
+        expires_at = "2027-01-01T00:00:00+00:00"
+        admin_id = "USER-LEGACY-ADMIN"
+        investigator_id = "USER-LEGACY-INVESTIGATOR"
+        connection.execute(
+            """
+            INSERT INTO investigations (
+                investigation_id, name, description, created_at, updated_at,
+                status, analysis_json, baseline_analysis_id,
+                baseline_analysis_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "INV-LEGACY-MIGRATION",
+                "Legacy migration case",
+                "Preserved case",
+                created_at,
+                created_at,
+                "open",
+                '{"evidence_records":[]}',
+                "ANL-LEGACY-MIGRATION",
+                '{"baseline":"preserved"}',
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO evidence_files (
+                file_id, investigation_id, source_id, filename, metadata_json,
+                analysis_json, created_at, uploader_user_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+            """,
+            (
+                "FILE-LEGACY-MIGRATION",
+                "INV-LEGACY-MIGRATION",
+                "SRC-LEGACY-MIGRATION",
+                "original evidence.log",
+                '{"file_path":"evidence/original.log","sha256":"'
+                + ("a" * 64)
+                + '"}',
+                '{"evidence_records":[{"evidence_id":"EV-LEGACY"}]}',
+                created_at,
+            ),
+        )
+        connection.executemany(
+            """
+            INSERT INTO users (
+                user_id, username, normalized_username, password_hash, role,
+                is_active, created_at, created_by, deactivated_at,
+                password_change_required
+            ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, NULL, 0)
+            """,
+            [
+                (
+                    admin_id,
+                    "legacy-admin@example.test",
+                    "legacy-admin@example.test",
+                    hash_password("Legacy-admin-password-123!"),
+                    "ADMIN",
+                    created_at,
+                    None,
+                ),
+                (
+                    investigator_id,
+                    "legacy-investigator@example.test",
+                    "legacy-investigator@example.test",
+                    hash_password("Legacy-investigator-123!"),
+                    "INVESTIGATOR",
+                    created_at,
+                    admin_id,
+                ),
+            ],
+        )
+        connection.execute(
+            """
+            INSERT INTO sessions (
+                session_id, user_id, token_hash, created_at, expires_at,
+                last_seen_at, revoked_at
+            ) VALUES (?, ?, ?, ?, ?, ?, NULL)
+            """,
+            (
+                "SESSION-LEGACY-MIGRATION",
+                admin_id,
+                hashlib.sha256(b"legacy-token").hexdigest(),
+                created_at,
+                expires_at,
+                created_at,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO investigation_assignments (
+                assignment_id, investigation_id, user_id, assigned_by,
+                assigned_at, revoked_at, reason
+            ) VALUES (?, ?, ?, ?, ?, NULL, ?)
+            """,
+            (
+                "ASSIGNMENT-LEGACY-MIGRATION",
+                "INV-LEGACY-MIGRATION",
+                investigator_id,
+                admin_id,
+                created_at,
+                "Preserve assignment",
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO audit_events (
+                event_id, actor_user_id, action, timestamp, investigation_id,
+                evidence_id, target_id, request_id, metadata_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "AUDIT-LEGACY-MIGRATION",
+                admin_id,
+                "LEGACY_EVENT",
+                created_at,
+                "INV-LEGACY-MIGRATION",
+                "EV-LEGACY",
+                "FILE-LEGACY-MIGRATION",
+                "REQ-LEGACY",
+                '{"preserved":true}',
+            ),
+        )
+
+        account_hash = hashlib.sha256(
+            b"legacy-admin@example.test\0testclient"
+        ).hexdigest()
+        source_hash = hashlib.sha256(b"testclient").hexdigest()
+        connection.executemany(
+            """
+            INSERT INTO login_attempt_buckets (
+                scope, bucket_hash, attempt_count, window_started_at
+            ) VALUES (?, ?, ?, ?)
+            """,
+            [
+                ("account", account_hash, 2, created_at),
+                ("source", source_hash, 1, created_at),
+            ],
+        )
+        connection.executemany(
+            """
+            INSERT INTO schema_migrations (version, name, applied_at)
+            VALUES (?, ?, ?)
+            """,
+            [
+                (1, "investigation_storage", created_at),
+                (2, "identity_and_audit_foundation", created_at),
+                (3, "login_attempt_rate_limits", created_at),
+            ],
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def test_legacy_database_migration_preserves_records(tmp_path):
+    data_directory = tmp_path / "legacy"
+    data_directory.mkdir()
+    database_path = data_directory / "investigations.sqlite3"
+    _create_legacy_database(database_path)
+    rows_before = _read_legacy_rows(database_path)
+
+    store = InvestigationStore(data_directory)
+    rows_after = _read_legacy_rows(database_path)
+    assert rows_after == rows_before
+
+    connection = sqlite3.connect(database_path)
+    try:
+        uploader = connection.execute(
+            """
+            SELECT uploader_user_id FROM evidence_files
+            WHERE file_id = 'FILE-LEGACY-1'
+            """
+        ).fetchone()
+        versions = connection.execute(
+            "SELECT version FROM schema_migrations ORDER BY version"
+        ).fetchall()
+    finally:
+        connection.close()
+
+    assert uploader == (None,)
+    assert versions == [(1,), (2,), (3,), (4,)]
+    assert store.get_investigation("INV-LEGACY-1")["baseline_analysis_id"] == (
+        "BASELINE-1"
+    )
+
+
+def test_migration_of_copy_of_repository_database_preserves_records(tmp_path):
+    if not LIVE_DATABASE.exists():
+        pytest.skip("Repository database is not present in this checkout")
+
+    data_directory = tmp_path / "database-copy"
+    data_directory.mkdir()
+    copied_database = data_directory / LIVE_DATABASE.name
+    shutil.copy2(LIVE_DATABASE, copied_database)
+    rows_before = _read_legacy_rows(copied_database)
+
+    InvestigationStore(data_directory)
+    rows_after = _read_legacy_rows(copied_database)
+
+    assert rows_after == rows_before
+    connection = sqlite3.connect(copied_database)
+    try:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM schema_migrations"
+        ).fetchone()[0] == 4
+        assert connection.execute(
+            """
+            SELECT COUNT(*) FROM evidence_files
+            WHERE uploader_user_id IS NOT NULL
+            """
+        ).fetchone()[0] == 0
+    finally:
+        connection.close()
+
+
+def test_migrations_are_repeatable(tmp_path):
+    store = InvestigationStore(tmp_path)
+    InvestigationStore(tmp_path)
+
+    with sqlite3.connect(store.database_path) as connection:
+        assert connection.execute(
+            "SELECT version FROM schema_migrations ORDER BY version"
+        ).fetchall() == [(1,), (2,), (3,), (4,)]
+
+
+def test_v3_login_bucket_migration_preserves_data_and_allows_login(
+    tmp_path,
+    monkeypatch,
+):
+    database_path = tmp_path / "investigations.sqlite3"
+    _create_v3_auth_database(database_path)
+
+    account_hash = hashlib.sha256(
+        b"legacy-admin@example.test\0testclient"
+    ).hexdigest()
+    source_hash = hashlib.sha256(b"testclient").hexdigest()
+    store = InvestigationStore(tmp_path)
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT version FROM schema_migrations ORDER BY version"
+        ).fetchall() == [(1,), (2,), (3,), (4,)]
+        assert connection.execute(
+            """
+            SELECT scope, attempt_count FROM login_attempt_buckets
+            WHERE bucket_hash = ?
+            """,
+            (account_hash,),
+        ).fetchone() == ("account_source", 2)
+        assert connection.execute(
+            """
+            SELECT scope, attempt_count FROM login_attempt_buckets
+            WHERE bucket_hash = ?
+            """,
+            (source_hash,),
+        ).fetchone() == ("source", 1)
+        for table, expected_count in (
+            ("investigations", 1),
+            ("evidence_files", 1),
+            ("users", 2),
+            ("sessions", 1),
+            ("investigation_assignments", 1),
+            ("audit_events", 1),
+        ):
+            assert connection.execute(
+                f"SELECT COUNT(*) FROM {table}"
+            ).fetchone()[0] == expected_count
+
+    monkeypatch.setenv("TATTVA_ENV", "test")
+    monkeypatch.setenv("TATTVA_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv(
+        "TATTVA_CORS_ORIGINS",
+        "http://127.0.0.1:5173",
+    )
+    from backend.api.main import create_app
+
+    app = create_app(tmp_path)
+    client = TestClient(app, base_url="https://testserver")
+    csrf_token = client.get("/auth/csrf").json()["csrf_token"]
+    response = client.post(
+        "/auth/login",
+        headers={
+            "Origin": "http://127.0.0.1:5173",
+            "X-CSRF-Token": csrf_token,
+        },
+        json={
+            "username": "legacy-admin@example.test",
+            "password": "Legacy-admin-password-123!",
+        },
+    )
+
+    assert response.status_code == 200
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            """
+            SELECT attempt_count FROM login_attempt_buckets
+            WHERE scope = 'source' AND bucket_hash = ?
+            """,
+            (source_hash,),
+        ).fetchone() == (1,)
+        assert connection.execute(
+            """
+            SELECT COUNT(*) FROM audit_events
+            WHERE event_id = 'AUDIT-LEGACY-MIGRATION'
+            """
+        ).fetchone()[0] == 1
+        assert connection.execute(
+            """
+            SELECT COUNT(*) FROM sessions
+            WHERE user_id = 'USER-LEGACY-ADMIN'
+            """
+        ).fetchone()[0] == 2
+    client.close()
+
+
+def test_user_creation_normalization_and_role_validation(tmp_path):
+    store = InvestigationStore(tmp_path)
+    hashed = hash_password("test-password")
+
+    user = store.create_user(" Analyst@Example.COM ", hashed, "INVESTIGATOR")
+
+    assert user["username"] == "Analyst@Example.COM"
+    assert store.get_user_by_username(" analyst@example.com ")["user_id"] == (
+        user["user_id"]
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        store.create_user("analyst@example.com", hashed, "VIEWER")
+    with pytest.raises(ValueError, match="Unsupported role"):
+        store.create_user("other@example.com", hashed, "SUPERUSER")
+    with pytest.raises(ValueError, match="Argon2id"):
+        store.create_user("plain@example.com", "plaintext-password", "VIEWER")
+
+    with sqlite3.connect(store.database_path) as connection:
+        stored_hash = connection.execute(
+            "SELECT password_hash FROM users WHERE user_id = ?",
+            (user["user_id"],),
+        ).fetchone()[0]
+    assert stored_hash != "test-password"
+    assert verify_password("test-password", stored_hash)
+
+
+def test_argon2id_password_hashing_and_verification():
+    encoded = hash_password("secure-test-password")
+
+    assert encoded.startswith("$argon2id$")
+    assert encoded != "secure-test-password"
+    assert verify_password("secure-test-password", encoded)
+    assert not verify_password("wrong-password", encoded)
+    with pytest.raises(ValueError):
+        hash_password("")
+    with pytest.raises(ValueError):
+        hash_password("short")
+
+
+def test_sessions_store_only_token_hashes_and_deactivation_revokes_them(
+    tmp_path,
+):
+    store = InvestigationStore(tmp_path)
+    user = store.create_user(
+        "session-user",
+        hash_password("session-password"),
+        "INVESTIGATOR",
+    )
+    token = "random-session-token"
+    session_id = store.create_session(
+        user["user_id"],
+        token,
+        "2099-01-01T00:00:00+00:00",
+    )
+
+    with sqlite3.connect(store.database_path) as connection:
+        stored_token_hash = connection.execute(
+            "SELECT token_hash FROM sessions WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()[0]
+    assert stored_token_hash != token
+    assert len(stored_token_hash) == 64
+
+    deactivated = store.set_user_active(user["user_id"], False)
+    assert not deactivated["is_active"]
+    with sqlite3.connect(store.database_path) as connection:
+        revoked_at = connection.execute(
+            "SELECT revoked_at FROM sessions WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()[0]
+    assert revoked_at is not None
+    assert store.set_user_active(user["user_id"], True)["is_active"]
+
+
+def test_admin_bootstrap_cli_and_duplicate_rejection(
+    tmp_path, monkeypatch, capsys
+):
+    responses = iter(["root@example.test"])
+    passwords = iter(["chosen-secret", "chosen-secret"])
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(responses))
+    monkeypatch.setattr(
+        "backend.provision_admin.getpass.getpass",
+        lambda _prompt: next(passwords),
+    )
+
+    assert provision_admin_main(["--data-directory", str(tmp_path)]) == 0
+    output = capsys.readouterr()
+    assert "Initial Admin provisioned" in output.out
+    assert "chosen-secret" not in output.out
+    assert "chosen-secret" not in output.err
+
+    store = InvestigationStore(tmp_path)
+    admin = store.get_user_by_username("ROOT@example.test")
+    assert admin["role"] == "ADMIN"
+    assert not admin["password_change_required"]
+
+    assert provision_admin_main(["--data-directory", str(tmp_path)]) == 1
+    duplicate_output = capsys.readouterr()
+    assert "already exists" in duplicate_output.err
+
+
+def test_initial_admin_provisioning_is_atomic_and_rejects_duplicate(tmp_path):
+    store = InvestigationStore(tmp_path)
+    store.provision_initial_admin("first-admin", hash_password("admin-secret"))
+
+    with pytest.raises(ValueError, match="already exists"):
+        store.provision_initial_admin(
+            "second-admin", hash_password("another-secret")
+        )
+    assert [user["username"] for user in store.list_users()] == ["first-admin"]
+
+
+def test_assignment_history_is_retained_after_revocation(tmp_path):
+    store = InvestigationStore(tmp_path)
+    investigation = store.create_investigation(
+        "INV-ASSIGN-1",
+        "Assignment test",
+        "",
+        "2026-01-01T00:00:00+00:00",
+        "open",
+    )
+    admin = store.create_user("admin", hash_password("admin-secret"), "ADMIN")
+    investigator = store.create_user(
+        "investigator",
+        hash_password("investigator-secret"),
+        "INVESTIGATOR",
+    )
+
+    first = store.create_assignment(
+        investigation["investigation_id"],
+        investigator["user_id"],
+        admin["user_id"],
+        reason="Initial assignment",
+    )
+    assert store.revoke_assignment(first["assignment_id"])["revoked_at"]
+    second = store.create_assignment(
+        investigation["investigation_id"],
+        investigator["user_id"],
+        admin["user_id"],
+        reason="Reassigned",
+    )
+
+    history = store.list_assignments(
+        investigation_id=investigation["investigation_id"],
+        user_id=investigator["user_id"],
+    )
+    assert len(history) == 2
+    assert history[0]["assignment_id"] == first["assignment_id"]
+    assert history[0]["revoked_at"] is not None
+    assert history[1]["assignment_id"] == second["assignment_id"]
+    assert history[1]["revoked_at"] is None
+
+
+def test_audit_events_are_structured_and_append_only(tmp_path):
+    store = InvestigationStore(tmp_path)
+    actor = store.create_user("auditor", hash_password("audit-secret"), "ADMIN")
+    event = store.append_audit_event(
+        "EVIDENCE_UPLOADED",
+        actor_user_id=actor["user_id"],
+        investigation_id="INV-AUDIT-1",
+        evidence_id="EV-1",
+        target_id="FILE-1",
+        request_id="REQ-1",
+        metadata={"filename": "source.log", "sha256": "b" * 64},
+    )
+
+    assert event["metadata"]["filename"] == "source.log"
+    assert store.list_audit_events("INV-AUDIT-1") == [event]
+
+    with store._connect() as connection:
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            connection.execute(
+                "UPDATE audit_events SET action = 'ALTERED' WHERE event_id = ?",
+                (event["event_id"],),
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            connection.execute(
+                "DELETE FROM audit_events WHERE event_id = ?",
+                (event["event_id"],),
+            )
+

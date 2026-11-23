@@ -13,13 +13,15 @@ class AuditManager:
         scenario_id,
         action,
         evidence_id=None,
-        details=None
+        details=None,
+        actor_user_id=None,
     ):
 
         record = AuditRecord(
             audit_id=f"AUD-{uuid4().hex[:8].upper()}",
             scenario_id=scenario_id,
             action=action,
+            actor_user_id=actor_user_id,
             evidence_id=evidence_id,
             details=details or {}
         )

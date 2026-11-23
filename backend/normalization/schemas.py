@@ -10,6 +10,7 @@ class EvidenceRecord(BaseModel):
     evidence_id: str
     source_id: Optional[str] = None
     timestamp: datetime
+    original_timestamp: Optional[str] = None
     source_type: str
     original_event_type: str
     event_type: str

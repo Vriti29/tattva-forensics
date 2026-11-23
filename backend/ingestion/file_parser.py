@@ -1,6 +1,7 @@
 
 import re
-from datetime import datetime
+
+from backend.normalization.timestamp_handler import normalize_timestamp
 
 def parse_file_log(content):
     records = []
@@ -19,7 +20,7 @@ def parse_file_log(content):
 
             date, time, event_type, username, file_id, operation, file_path, host_id = match.groups()
             timestamp = f"{date} {time}"
-            datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+            normalize_timestamp(timestamp)
 
             if event_type not in allowed_events:
                 raise ValueError(f"Unknown event type: {event_type}")

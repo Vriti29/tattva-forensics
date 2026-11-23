@@ -1,6 +1,7 @@
 import re
-from datetime import datetime
 import ipaddress
+
+from backend.normalization.timestamp_handler import normalize_timestamp
 
 def parse_auth_log(content):
     records = []
@@ -18,7 +19,7 @@ def parse_auth_log(content):
                 raise ValueError("Invalid authentication log format")
 
             timestamp, event_type, username, ip_address = match.groups()
-            datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            normalize_timestamp(timestamp)
 
             if event_type not in allowed_events:
                 raise ValueError(f"Unknown event type: {event_type}")

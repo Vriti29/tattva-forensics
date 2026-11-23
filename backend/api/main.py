@@ -8,6 +8,7 @@ from fastapi import (
     FastAPI,
     File,
     Form,
+    Depends,
     HTTPException,
     Request,
     UploadFile,
@@ -16,7 +17,15 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field
 
 from backend.api.simulation_setup import install_simulation_api
+from backend.api.auth_routes import router as auth_router
+from backend.auth.security import (
+    configure_http_security,
+    get_current_user,
+    require_investigation_access,
+    require_roles,
+)
 from backend.investigation_store import InvestigationStore
+from backend.normalization.timestamp_handler import sort_records_by_timestamp
 from backend.pipeline import analyze_evidence_records, process_evidence_file
 from backend.simulation.forensic_adapter import (
     analyze_evidence as run_forensic_analysis
@@ -172,6 +181,9 @@ def create_app(data_directory=None):
     application.state.baseline_analysis_store = {}
     application.state.investigation_lock = threading.RLock()
 
+    configure_http_security(application)
+    application.include_router(auth_router)
+
     install_simulation_api(
         app=application,
         analysis_function=run_forensic_analysis,
@@ -189,7 +201,11 @@ def create_app(data_directory=None):
         return {"status": "healthy"}
 
     @application.post("/investigations", status_code=201)
-    def create_investigation(data: CreateInvestigationRequest, request: Request):
+    def create_investigation(
+        data: CreateInvestigationRequest,
+        request: Request,
+        actor=Depends(require_roles("ADMIN")),
+    ):
         name = data.name.strip()
         status = data.status.strip()
         if not name or not status:
@@ -200,13 +216,20 @@ def create_app(data_directory=None):
 
         investigation_id = f"INV-{uuid4().hex[:10].upper()}"
         try:
-            return request.app.state.investigation_store.create_investigation(
+            investigation = request.app.state.investigation_store.create_investigation(
                 investigation_id,
                 name,
                 data.description,
                 _now(),
                 status,
             )
+            request.app.state.investigation_store.append_audit_event(
+                action="INVESTIGATION_CREATED",
+                actor_user_id=actor["user_id"],
+                investigation_id=investigation_id,
+                metadata={"name": name},
+            )
+            return investigation
         except Exception as error:
             raise HTTPException(
                 status_code=500,
@@ -214,11 +237,31 @@ def create_app(data_directory=None):
             ) from error
 
     @application.get("/investigations")
-    def list_investigations(request: Request):
-        return request.app.state.investigation_store.list_investigations()
+    def list_investigations(
+        request: Request,
+        user=Depends(get_current_user),
+    ):
+        store = request.app.state.investigation_store
+        investigations = store.list_investigations()
+        if user["role"] == "ADMIN":
+            return investigations
+        assigned_ids = {
+            assignment["investigation_id"]
+            for assignment in store.list_assignments(user_id=user["user_id"])
+            if assignment["revoked_at"] is None
+        }
+        return [
+            item
+            for item in investigations
+            if item["investigation_id"] in assigned_ids
+        ]
 
     @application.get("/investigations/{investigation_id}")
-    def get_investigation(investigation_id: str, request: Request):
+    def get_investigation(
+        investigation_id: str,
+        request: Request,
+        _user=Depends(require_investigation_access("read")),
+    ):
         detail = request.app.state.investigation_store.get_investigation(
             investigation_id
         )
@@ -230,7 +273,8 @@ def create_app(data_directory=None):
     def update_investigation(
         investigation_id: str,
         data: UpdateInvestigationRequest,
-        request: Request
+        request: Request,
+        actor=Depends(require_investigation_access("update")),
     ):
         fields = data.model_dump(exclude_unset=True)
         if "name" in fields:
@@ -257,6 +301,12 @@ def create_app(data_directory=None):
         )
         if updated is None:
             raise HTTPException(status_code=404, detail="Investigation not found")
+        request.app.state.investigation_store.append_audit_event(
+            action="INVESTIGATION_UPDATED",
+            actor_user_id=actor["user_id"],
+            investigation_id=investigation_id,
+            metadata={"changed_fields": sorted(fields)},
+        )
         return updated
 
     async def ingest_evidence(
@@ -264,7 +314,8 @@ def create_app(data_directory=None):
         upload,
         source_type,
         request,
-        create_new=False
+        create_new=False,
+        uploader_user_id=None,
     ):
         store = request.app.state.investigation_store
         if not create_new and store.get_investigation(investigation_id) is None:
@@ -338,6 +389,7 @@ def create_app(data_directory=None):
                     baseline_analysis_id,
                     baseline_analysis,
                     _now(),
+                    uploader_user_id=uploader_user_id,
                 )
                 request.app.state.investigations[investigation_id] = combined
                 request.app.state.simulation_evidence_store[
@@ -380,20 +432,23 @@ def create_app(data_directory=None):
         investigation_id: str,
         request: Request,
         file: UploadFile = File(...),
-        source_type: str = Form(...)
+        source_type: str = Form(...),
+        user=Depends(require_investigation_access("upload")),
     ):
         return await ingest_evidence(
             investigation_id,
             file,
             source_type,
             request,
+            uploader_user_id=user["user_id"],
         )
 
     @application.post("/analyze")
     async def analyze_evidence(
         request: Request,
         file: UploadFile = File(...),
-        source_type: str = Form(...)
+        source_type: str = Form(...),
+        user=Depends(require_roles("ADMIN")),
     ):
         investigation_id = f"INV-{uuid4().hex[:10].upper()}"
         result = await ingest_evidence(
@@ -402,6 +457,7 @@ def create_app(data_directory=None):
             source_type,
             request,
             create_new=True,
+            uploader_user_id=user["user_id"],
         )
         analysis = result["analysis"]
         return {
@@ -424,7 +480,11 @@ def create_app(data_directory=None):
         return result
 
     @application.get("/investigations/{investigation_id}/summary")
-    def get_investigation_summary(investigation_id: str, request: Request):
+    def get_investigation_summary(
+        investigation_id: str,
+        request: Request,
+        _user=Depends(require_investigation_access("read")),
+    ):
         result = get_cached_analysis(investigation_id, request)
         findings = result["detection"]["findings"]
         anomalies = result["anomaly_detection"]["anomalies"]
@@ -445,20 +505,32 @@ def create_app(data_directory=None):
         }
 
     @application.get("/investigations/{investigation_id}/findings")
-    def get_investigation_findings(investigation_id: str, request: Request):
+    def get_investigation_findings(
+        investigation_id: str,
+        request: Request,
+        _user=Depends(require_investigation_access("read")),
+    ):
         return get_cached_analysis(investigation_id, request)["detection"]
 
     @application.get("/investigations/{investigation_id}/anomalies")
-    def get_investigation_anomalies(investigation_id: str, request: Request):
+    def get_investigation_anomalies(
+        investigation_id: str,
+        request: Request,
+        _user=Depends(require_investigation_access("read")),
+    ):
         return get_cached_analysis(investigation_id, request)["anomaly_detection"]
 
     @application.get("/investigations/{investigation_id}/timeline")
-    def get_investigation_timeline(investigation_id: str, request: Request):
+    def get_investigation_timeline(
+        investigation_id: str,
+        request: Request,
+        _user=Depends(require_investigation_access("read")),
+    ):
         result = get_cached_analysis(investigation_id, request)
-        timeline = sorted(
-            result["evidence_records"],
-            key=lambda record: record["timestamp"]
-        )
+        try:
+            timeline = sort_records_by_timestamp(result["evidence_records"])
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
         return {
             "investigation_id": investigation_id,
             "total_events": len(timeline),
@@ -466,7 +538,11 @@ def create_app(data_directory=None):
         }
 
     @application.get("/investigations/{investigation_id}/graph")
-    def get_investigation_graph(investigation_id: str, request: Request):
+    def get_investigation_graph(
+        investigation_id: str,
+        request: Request,
+        _user=Depends(require_investigation_access("read")),
+    ):
         return get_cached_analysis(investigation_id, request)["correlation"]["graph"]
 
     return application
