@@ -1717,3 +1717,207 @@ button {
     font-size: 12px;
   }
 }
+
+/* Authentication and administration */
+
+.auth-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background: #f3f5fa;
+  color: #172b4d;
+}
+
+.auth-panel {
+  width: min(100%, 500px);
+  text-align: left;
+}
+
+.auth-logo {
+  margin-bottom: 20px;
+}
+
+.auth-panel h1 {
+  margin: 8px 0 12px;
+  color: #19365c;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.auth-description {
+  margin-bottom: 20px;
+  color: #5e7089;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.auth-panel .management-message {
+  margin: 14px 0;
+}
+
+.auth-panel .primary-button {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.admin-dashboard-grid > .management-card > p {
+  margin: 8px 0 16px;
+  color: #5e7089;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.admin-help {
+  color: #5e7089;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.admin-section {
+  margin-bottom: 20px;
+}
+
+.admin-users-table {
+  min-width: 850px;
+}
+
+.admin-users-table select,
+.admin-assignment-controls select {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid #d5deea;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #172b4d;
+  font: inherit;
+}
+
+.inactive-status {
+  background: #f1f3f6;
+  color: #59697e;
+}
+
+.admin-case-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 14px;
+}
+
+.admin-case-card {
+  min-width: 0;
+  padding: 17px;
+  border: 1px solid #e3eaf3;
+  border-radius: 11px;
+  background: #fbfcfe;
+}
+
+.admin-case-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-case-heading > div {
+  min-width: 0;
+}
+
+.admin-case-heading strong {
+  display: block;
+  color: #19365c;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.admin-case-meta {
+  margin: 10px 0;
+  color: #5e7089;
+  font-size: 11px;
+}
+
+.assigned-officers {
+  padding: 12px 0;
+  border-top: 1px solid #e6edf5;
+}
+
+.assigned-officers > strong {
+  color: #19365c;
+  font-size: 12px;
+}
+
+.assigned-officers ul {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 10px 0 0;
+  list-style: none;
+}
+
+.assigned-officers li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #53657d;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.admin-assignment-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.admin-assignment-controls label {
+  grid-column: 1 / -1;
+  color: #415671;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.admin-assignment-controls .primary-button {
+  padding: 10px 14px;
+}
+
+@media (max-width: 800px) {
+  .admin-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 650px) {
+  .topbar-actions {
+    justify-content: stretch;
+  }
+
+  .topbar-actions button {
+    flex: 1;
+  }
+
+  .admin-assignment-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-assignment-controls label {
+    grid-column: auto;
+  }
+}
