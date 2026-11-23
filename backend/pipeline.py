@@ -21,7 +21,12 @@ PARSERS = {
     "archive": parse_archive_log
 }
 
-def process_evidence_file(file_path, source_type):
+def process_evidence_file(
+    file_path,
+    source_type,
+    original_filename=None,
+    evidence_id_prefix=None
+):
     if source_type not in PARSERS:
         raise ValueError(f"Unsupported source type: {source_type}")
 
@@ -29,7 +34,11 @@ def process_evidence_file(file_path, source_type):
     content = read_file(file_path)
 
     # 1. Preserve original file metadata and calculate its hash
-    metadata = create_evidence_metadata(file_path, source_type)
+    metadata = create_evidence_metadata(
+        file_path,
+        source_type,
+        filename=original_filename
+    )
     source_id = f"SRC-{uuid4().hex[:8].upper()}"
 
    # 2. Parse raw evidence records
@@ -47,7 +56,8 @@ def process_evidence_file(file_path, source_type):
     # 3. Normalize parsed records
     normalization_result = normalize_records(
         parser_result["records"],
-        source_id=source_id
+        source_id=source_id,
+        evidence_id_prefix=evidence_id_prefix
     )
 
     records = normalization_result["records"]
@@ -56,14 +66,9 @@ def process_evidence_file(file_path, source_type):
     for record in records:
         record.record_sha256 = calculate_record_hash(record)
 
-    # 5. Run rule-based detection
-    detection_result = run_detection(records)
-
-    # 6. Run anomaly detection
-    anomaly_result = detect_anomalies(records)
-
-    # 7. Correlate evidence and build graph
-    correlation_result = correlate_evidence(records)
+    analysis = analyze_evidence_records(
+        [record.model_dump(mode="json") for record in records]
+    )
 
     return {
         "source_id": source_id,
@@ -80,10 +85,27 @@ def process_evidence_file(file_path, source_type):
             "failed_records": normalization_result["failed_records"],
             "errors": normalization_result["errors"]
         },
+        **analysis
+    }
+
+
+def analyze_evidence_records(records):
+    """Run the forensic engines over a combined set of evidence records."""
+    from backend.normalization.schemas import EvidenceRecord
+
+    prepared_records = [
+        EvidenceRecord.model_validate(record)
+        if not isinstance(record, EvidenceRecord)
+        else record
+        for record in records
+    ]
+
+    return {
         "evidence_records": [
-            record.model_dump(mode="json") for record in records
+            record.model_dump(mode="json")
+            for record in prepared_records
         ],
-        "detection": detection_result,
-        "anomaly_detection": anomaly_result,
-        "correlation": correlation_result
+        "detection": run_detection(prepared_records),
+        "anomaly_detection": detect_anomalies(prepared_records),
+        "correlation": correlate_evidence(prepared_records)
     }

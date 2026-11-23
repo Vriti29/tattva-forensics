@@ -3,7 +3,12 @@ from .timestamp_handler import normalize_timestamp
 from .event_mapper import map_event_type
 from .validators import validate_evidence
 
-def normalize_records(records, starting_id=1, source_id=None):
+def normalize_records(
+    records,
+    starting_id=1,
+    source_id=None,
+    evidence_id_prefix=None
+):
     normalized = []
     errors = []
 
@@ -13,7 +18,11 @@ def normalize_records(records, starting_id=1, source_id=None):
 
             evidence = {
                 **record,
-                "evidence_id": f"EV-{starting_id + index:04d}",
+                "evidence_id": (
+                    f"{evidence_id_prefix}-{starting_id + index:04d}"
+                    if evidence_id_prefix
+                    else f"EV-{starting_id + index:04d}"
+                ),
                 "source_id": source_id,
                 "timestamp": normalize_timestamp(record["timestamp"]),
                 "event_type": map_event_type(original_event),
