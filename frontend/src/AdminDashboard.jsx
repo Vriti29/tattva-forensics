@@ -217,9 +217,7 @@ export function AdminDashboard() {
   return (
     <section className="management-page admin-dashboard">
       <div className="management-page-heading">
-        <div>
-          <span className="eyebrow">ADMINISTRATION</span>
-          <h2>Admin Dashboard</h2>
+        <div className="admin-page-description">
           <p>Manage accounts and assigned investigation access.</p>
         </div>
         <button
@@ -255,7 +253,7 @@ export function AdminDashboard() {
             <label htmlFor="new-user-username">Username or email</label>
             <input
               id="new-user-username"
-              autoComplete="off"
+              autoComplete="username"
               value={newUser.username}
               onChange={(event) =>
                 setNewUser((current) => ({
@@ -273,6 +271,7 @@ export function AdminDashboard() {
               id="new-user-password"
               type="password"
               autoComplete="new-password"
+              aria-describedby="new-user-password-help"
               value={newUser.password}
               onChange={(event) =>
                 setNewUser((current) => ({
@@ -303,7 +302,7 @@ export function AdminDashboard() {
                 </option>
               ))}
             </select>
-            <p className="admin-help">
+            <p id="new-user-password-help" className="admin-help">
               Passwords must contain 12 to 256 characters. The user must change
               the initial password before accessing cases.
             </p>
@@ -323,10 +322,13 @@ export function AdminDashboard() {
 
         <section className="management-card admin-audit-card">
           <h3>Audit Activity</h3>
-          <p>
-            The current backend does not expose a read endpoint for audit
-            events. No activity records are displayed here.
-          </p>
+          <div className="admin-audit-unavailable" role="status">
+            <strong>Audit events unavailable</strong>
+            <p>
+              The backend does not provide an audit read endpoint yet. No
+              activity records are shown.
+            </p>
+          </div>
         </section>
       </div>
 
