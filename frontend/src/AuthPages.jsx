@@ -49,6 +49,7 @@ export function LoginPage({ onLogin, notice, connectionError }) {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -79,19 +80,15 @@ export function LoginPage({ onLogin, notice, connectionError }) {
             understanding the connections between them.
           </p>
 
-          <div className="auth-visualization" aria-hidden="true">
-            <div className="visualization-grid" />
-            <div className="visualization-orbit orbit-outer" />
-            <div className="visualization-orbit orbit-inner" />
-            <div className="visualization-core">
-              <span>CASE</span>
-              <strong>INTELLIGENCE</strong>
-            </div>
-            <span className="visualization-node node-one" />
-            <span className="visualization-node node-two" />
-            <span className="visualization-node node-three" />
-            <span className="visualization-node node-four" />
-            <div className="visualization-caption">
+          <div className="auth-visualization auth-photo-visual">
+            <img
+              src="/login-forensics.png"
+              alt="Digital forensic investigation with magnifying glass and evidence analysis"
+            />
+
+            <div className="photo-overlay" />
+
+            <div className="photo-caption">
               <span>01</span>
               <span>Evidence. Context. Clarity.</span>
             </div>
@@ -107,7 +104,7 @@ export function LoginPage({ onLogin, notice, connectionError }) {
         <section className="auth-panel">
           <div className="auth-panel-heading">
             <p className="auth-kicker">WELCOME BACK</p>
-            <h2>Sign in to Tattva</h2>
+            <h2>Sign in to Tattva Forensics</h2>
             <p className="auth-description">
               Choose your sign-in area, then use your provisioned account.
             </p>
@@ -181,17 +178,30 @@ export function LoginPage({ onLogin, notice, connectionError }) {
               placeholder="name@organization.com"
             />
             <label htmlFor="login-password">Password</label>
-            <input
-              id="login-password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              maxLength={1024}
-              required
-              disabled={submitting}
-              placeholder="Enter your password"
-            />
+            <div className="auth-password-wrap">
+              <span className="password-field-icon">♙</span>
+
+              <input
+                id="login-password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                maxLength={1024}
+                required
+                disabled={submitting}
+                placeholder="Enter your password"
+              />
+
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword((value) => !value)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
             <button
               className="auth-submit"
               type="submit"
