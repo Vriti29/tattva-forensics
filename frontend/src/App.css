@@ -12029,3 +12029,407 @@ button {
   border-radius: 9px !important;
   background: #f0c38e !important;
 }
+
+/* ==========================================================================
+   RESTORE EVIDENCE GRAPH, WHAT-IF SIMULATOR, AND REPORTS TO CURRENT DESIGN
+   ========================================================================== */
+
+/* 1. EVIDENCE GRAPH — Radial Layout, Colored Nodes & Clean Edges */
+.forensic-workspace-shell .graph-page {
+  width: 100%;
+  max-width: none;
+  padding: 0 0 36px;
+}
+
+.forensic-workspace-shell .graph-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(190px, 0.7fr) auto;
+  align-items: end;
+  gap: 14px;
+  padding: 16px 20px;
+  border: 1px solid rgba(240, 195, 142, 0.22);
+  border-radius: 14px;
+  background: rgba(48, 43, 75, 0.88);
+  backdrop-filter: blur(12px);
+}
+
+.forensic-workspace-shell .graph-controls label {
+  color: #f0c38e;
+  font-size: 13px;
+}
+
+.forensic-workspace-shell .graph-controls input,
+.forensic-workspace-shell .graph-controls select {
+  background: rgba(23, 20, 38, 0.92);
+  border: 1px solid rgba(240, 195, 142, 0.28);
+  color: #fbf7f1;
+}
+
+.forensic-workspace-shell .graph-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(300px, 0.75fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.forensic-workspace-shell .graph-canvas {
+  position: relative;
+  min-height: 590px;
+  border: 1px solid rgba(240, 195, 142, 0.24);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(90, 82, 126, 0.24), transparent 62%),
+    rgba(23, 20, 38, 0.96);
+  overflow: hidden;
+}
+
+.forensic-workspace-shell .graph-visualization {
+  position: relative;
+  width: 100%;
+  height: 590px;
+}
+
+.forensic-workspace-shell .graph-connections {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.forensic-workspace-shell .graph-node {
+  position: absolute;
+  z-index: 2;
+  width: 156px;
+  min-height: 94px;
+  padding: 11px 12px;
+  transform: translate(-50%, -50%);
+  border-radius: 14px;
+  border: 1.5px solid rgba(166, 153, 212, 0.65);
+  background: linear-gradient(145deg, rgba(72, 66, 109, 0.97), rgba(33, 29, 56, 0.98));
+  box-shadow: 0 8px 20px rgba(13, 11, 24, 0.36);
+  text-align: center;
+}
+
+/* Node Category Colors */
+.forensic-workspace-shell .graph-node.file {
+  border-color: #62b1ff;
+  box-shadow: 0 6px 18px rgba(98, 177, 255, 0.16);
+}
+
+.forensic-workspace-shell .graph-node.authentication,
+.forensic-workspace-shell .graph-node.archive {
+  border-color: #f1aa9b;
+  box-shadow: 0 6px 18px rgba(241, 170, 155, 0.16);
+}
+
+.forensic-workspace-shell .graph-node.network {
+  border-color: #45c99a;
+  box-shadow: 0 6px 18px rgba(69, 201, 154, 0.16);
+}
+
+.forensic-workspace-shell .graph-node.node-center {
+  border-color: #f0c38e;
+  background: linear-gradient(145deg, rgba(90, 82, 126, 0.98), rgba(49, 44, 81, 0.99));
+}
+
+.forensic-workspace-shell .graph-node > span {
+  color: #f6d7b3;
+  font-size: 10px;
+}
+
+.forensic-workspace-shell .graph-node > strong {
+  color: #fbf7f1;
+  font-size: 13px;
+}
+
+.forensic-workspace-shell .graph-node > small {
+  color: #d0cada;
+  font-size: 10px;
+}
+
+.forensic-workspace-shell .graph-node.is-selected,
+.forensic-workspace-shell .graph-node.graph-node-selected {
+  border: 2px solid #f0c38e !important;
+  box-shadow: 0 0 0 4px rgba(240, 195, 142, 0.2), 0 12px 26px rgba(13, 11, 24, 0.5) !important;
+  z-index: 5;
+}
+
+.forensic-workspace-shell .graph-details {
+  padding: 20px;
+  border: 1px solid rgba(240, 195, 142, 0.22);
+  border-radius: 16px;
+  background: linear-gradient(148deg, rgba(57, 52, 83, 0.95), rgba(33, 29, 56, 0.92));
+}
+
+.forensic-workspace-shell .graph-details-heading h3,
+.forensic-workspace-shell .graph-details > h4 {
+  color: #f0c38e;
+}
+
+/* 2. WHAT-IF SIMULATOR — Consistent Typography & Two-Column Grid */
+.forensic-workspace-shell .simulator-page {
+  font-family: var(--tf-body-font);
+  padding: 22px 28px 45px !important;
+}
+
+.forensic-workspace-shell .simulator-page h2,
+.forensic-workspace-shell .simulator-page h3 {
+  font-family: var(--tf-heading-font) !important;
+  color: #f0c38e !important;
+}
+
+.forensic-workspace-shell .simulator-form-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.forensic-workspace-shell .simulator-form-actions .primary-button {
+  grid-column: auto;
+  justify-self: auto;
+  background: #f0c38e !important;
+  color: #171426 !important;
+}
+
+.forensic-workspace-shell .simulation-result-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+/* 3. REPORTS PAGE — Full-Width Layout & Clean Typography */
+.forensic-workspace-shell .report-page {
+  width: 100% !important;
+  max-width: none !important;
+  padding: 16px 28px 45px !important;
+  font-family: var(--tf-body-font);
+}
+
+.forensic-workspace-shell .report-section-title,
+.forensic-workspace-shell .report-header .report-title {
+  font-family: var(--tf-heading-font) !important;
+}
+
+.forensic-workspace-shell .reports-investigation-context strong {
+  font-family: var(--tf-script-font), "Segoe Print", cursive !important;
+  font-size: 38px !important;
+  color: #f6d7b3 !important;
+}
+
+.forensic-workspace-shell .report-overview-grid,
+.forensic-workspace-shell .report-summary-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+}
+
+.forensic-workspace-shell .report-entity-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+}
+
+@media (max-width: 960px) {
+  .forensic-workspace-shell .graph-layout,
+  .forensic-workspace-shell .simulation-result-columns {
+    grid-template-columns: 1fr !important;
+  }
+
+  .forensic-workspace-shell .report-overview-grid,
+  .forensic-workspace-shell .report-summary-grid,
+  .forensic-workspace-shell .report-entity-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .forensic-workspace-shell .report-overview-grid,
+  .forensic-workspace-shell .report-summary-grid,
+  .forensic-workspace-shell .report-entity-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+/* ==========================================================================
+   RAW BACKGROUND IMAGE — NO ADDED GRADIENTS, TINTS, OR FILTERS
+   ========================================================================== */
+
+.app-container.dashboard-shell,
+.app-container.reference-theme-shell,
+.app-container.admin-shell,
+.main-content:has(.reports-page),
+.main-content:has(.report-page),
+.main-content:has(.simulator-page),
+.investigations-shell .main-content {
+  background-image: url("/fingerprint-background.png") !important;
+  background-color: transparent !important;
+  background-size: cover !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+  filter: none !important;
+}
+
+/* Remove any decorative overlay pseudo-elements on the background */
+.app-container.dashboard-shell::before,
+.app-container.dashboard-shell::after,
+.app-container.reference-theme-shell::before,
+.app-container.reference-theme-shell::after,
+.app-container.admin-shell::before,
+.app-container.admin-shell::after {
+  content: none !important;
+  display: none !important;
+}
+/* ==========================================================================
+   1. REMOVE BOX AROUND CASE NAME ("Ada Office Leak")
+   ========================================================================== */
+.app-container .reports-investigation-context,
+.app-container .selected-investigation-context {
+  background: transparent !important;
+  border: none !important;
+  border-left: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  min-height: auto !important;
+}
+
+/* ==========================================================================
+   2. FIX "ALL INVESTIGATIONS" BUTTON COLOR (PEACH / SAND-GOLD THEME)
+   ========================================================================== */
+.app-container .topbar .secondary-button,
+.app-container .reports-topbar .secondary-button,
+.app-container .topbar-actions .secondary-button {
+  background: rgba(240, 195, 142, 0.14) !important;
+  border: 1px solid rgba(240, 195, 142, 0.5) !important;
+  color: #f6d7b3 !important;
+  border-radius: 9px !important;
+  font-weight: 600 !important;
+}
+
+.app-container .topbar .secondary-button:hover:not(:disabled),
+.app-container .reports-topbar .secondary-button:hover:not(:disabled),
+.app-container .topbar-actions .secondary-button:hover:not(:disabled) {
+  background: rgba(240, 195, 142, 0.25) !important;
+  border-color: #f0c38e !important;
+  color: #ffffff !important;
+}
+
+/* ==========================================================================
+   3. NAVIGATION BAR — MATCH PURPLE & PEACH THEME ACROSS ALL PAGES
+   ========================================================================== */
+.app-container .app-navigation {
+  background: linear-gradient(
+    112deg,
+    rgba(49, 44, 81, 0.96),
+    rgba(33, 29, 56, 0.94) 56%,
+    rgba(57, 52, 83, 0.93)
+  ) !important;
+  border-bottom: 1px solid rgba(240, 195, 142, 0.2) !important;
+  box-shadow: 0 12px 30px rgba(23, 20, 38, 0.24) !important;
+  backdrop-filter: blur(16px) !important;
+}
+
+/* Nav links & icons (removes blue icons, makes them peach) */
+.app-container .app-navigation .nav-item {
+  color: #e0dbea !important;
+}
+
+.app-container .app-navigation .nav-item:hover {
+  background: rgba(72, 66, 109, 0.68) !important;
+  color: #fbf7f1 !important;
+}
+
+.app-container .app-navigation .nav-item.active {
+  border-color: rgba(240, 195, 142, 0.42) !important;
+  background: rgba(240, 195, 142, 0.14) !important;
+  color: #f6d7b3 !important;
+  box-shadow: inset 0 -2px 0 rgba(240, 195, 142, 0.8) !important;
+}
+
+.app-container .app-navigation .nav-icon,
+.app-container .app-navigation svg,
+.app-container .app-navigation svg path,
+.app-container .app-navigation svg circle,
+.app-container .app-navigation svg rect,
+.app-container .app-navigation svg line,
+.app-container .app-navigation svg polyline {
+  color: #f0c38e !important;
+  stroke: #f0c38e !important;
+}
+
+/* User avatar badge & Sign out button */
+.app-container .app-navigation .user-avatar {
+  border-color: rgba(240, 195, 142, 0.4) !important;
+  background: rgba(240, 195, 142, 0.14) !important;
+  color: #f6d7b3 !important;
+}
+
+.app-container .app-navigation .app-navigation-signout {
+  border-color: rgba(241, 170, 155, 0.35) !important;
+  color: #f5c1b6 !important;
+}
+
+.app-container .app-navigation .app-navigation-signout:hover {
+  background: rgba(241, 170, 155, 0.14) !important;
+  border-color: #f1aa9b !important;
+}
+/* ==========================================================================
+   EVIDENCE GRAPH — ADD RAW FINGERPRINT BACKGROUND
+   ========================================================================== */
+.app-container.forensic-workspace-shell,
+.main-content:has(.graph-page) {
+  background-image: url("/fingerprint-background.png") !important;
+  background-color: transparent !important;
+  background-size: cover !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+}
+
+/* Graph canvas ko thoda translucent rakho taaki peeche fingerprint dikhe */
+.forensic-workspace-shell .graph-canvas {
+  background: rgba(23, 20, 38, 0.72) !important;
+  backdrop-filter: blur(8px) !important;
+}
+/* ==========================================================================
+   1. INVESTIGATIONS PAGE — CLEAN MANROPE / INTER FONT (NO GEORGIA / COMIC NEUE)
+   ========================================================================== */
+.app-container.investigations-shell,
+.app-container.investigations-shell .main-content,
+.app-container.investigations-shell p,
+.app-container.investigations-shell span,
+.app-container.investigations-shell label,
+.app-container.investigations-shell input,
+.app-container.investigations-shell select,
+.app-container.investigations-shell textarea,
+.app-container.investigations-shell button {
+  font-family: var(--tf-body-font, Inter, "Segoe UI", sans-serif) !important;
+}
+
+.app-container.investigations-shell .topbar h1,
+.app-container.investigations-shell .investigations-page-heading h2,
+.app-container.investigations-shell .investigation-register-heading h3,
+.app-container.investigations-shell .investigation-record-title h4,
+.app-container.investigations-shell .management-modal-heading h2 {
+  font-family: var(--tf-heading-font, "Manrope", "Avenir Next", Inter, sans-serif) !important;
+  letter-spacing: -0.4px !important;
+}
+
+/* ==========================================================================
+   2. WHAT-IF SIMULATOR — REMOVE OUTER BLOCK AROUND SELECTED INVESTIGATION
+   ========================================================================== */
+.forensic-workspace-shell:has(.simulator-page) .reports-investigation-context,
+.forensic-workspace-shell:has(.simulator-page) .selected-investigation-context,
+.app-container .reports-topbar .reports-investigation-context {
+  background: transparent !important;
+  border: none !important;
+  border-left: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  min-height: auto !important;
+}
