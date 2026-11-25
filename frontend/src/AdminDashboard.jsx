@@ -217,9 +217,7 @@ export function AdminDashboard() {
   return (
     <section className="management-page admin-dashboard">
       <div className="management-page-heading">
-        <div>
-          <span className="eyebrow">ADMINISTRATION</span>
-          <h2>Admin Dashboard</h2>
+        <div className="admin-page-description">
           <p>Manage accounts and assigned investigation access.</p>
         </div>
         <button
@@ -255,7 +253,7 @@ export function AdminDashboard() {
             <label htmlFor="new-user-username">Username or email</label>
             <input
               id="new-user-username"
-              autoComplete="off"
+              autoComplete="username"
               value={newUser.username}
               onChange={(event) =>
                 setNewUser((current) => ({
@@ -273,6 +271,7 @@ export function AdminDashboard() {
               id="new-user-password"
               type="password"
               autoComplete="new-password"
+              aria-describedby="new-user-password-help"
               value={newUser.password}
               onChange={(event) =>
                 setNewUser((current) => ({

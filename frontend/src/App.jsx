@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { AdminDashboard } from "./AdminDashboard.jsx";
 import {
+  AdministratorDashboard,
+  InvestigatorDashboard,
+} from "./Dashboard.jsx";
+import {
   AuthLoadingPage,
   LoginPage,
   RequiredPasswordChangePage,
@@ -10,7 +14,6 @@ import {
   InvestigationList,
 } from "./InvestigationManagement.jsx";
 import {
-  formatDate,
   refreshCsrfToken,
   requestJson,
   setCsrfToken,
@@ -25,7 +28,7 @@ const menuItems = [
   { label: "What-If Simulator", icon: "⇄" },
   { label: "Reports", icon: "▤" },
   { label: "Investigations", icon: "⌕" },
-  { label: "Admin Dashboard", icon: "⚙" },
+  { label: "Administration", icon: "⚙" },
 ];
 
 const pageNames = menuItems.map((item) => item.label);
@@ -38,10 +41,32 @@ function formatEvidenceId(evidenceId) {
   return match ? `EV-${match[1]}` : evidenceId;
 }
 
+const evidenceSourceLabels = {
+  authentication: "Authentication",
+  file: "File activity",
+  network: "Network",
+  archive: "Archive",
+};
+
+function getTimestampMillis(timestamp) {
+  if (typeof timestamp !== "string" || !timestamp.trim()) {
+    return Number.NaN;
+  }
+  const value = timestamp.trim();
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
+  return Date.parse(hasTimezone ? value : `${value}Z`);
+}
+
+function getEvidenceSourceLabel(sourceType) {
+  return evidenceSourceLabels[sourceType] || sourceType || "Unknown source";
+}
+
 function getInitialPage() {
   try {
     const storedPage = window.localStorage.getItem("tattva:active-page");
-    return pageNames.includes(storedPage) ? storedPage : "Dashboard";
+    const requestedPage =
+      storedPage === "Admin Dashboard" ? "Administration" : storedPage;
+    return pageNames.includes(requestedPage) ? requestedPage : "Dashboard";
   } catch {
     return "Dashboard";
   }
@@ -55,6 +80,14 @@ function App() {
   const [authError, setAuthError] = useState("");
   const [selectedEvidence, setSelectedEvidence] = useState(null);
   const [evidenceRecords, setEvidenceRecords] = useState([]);
+  const [selectedEvidenceSourceId, setSelectedEvidenceSourceId] = useState("");
+  const [selectedForensicRecordId, setSelectedForensicRecordId] = useState("");
+  const [evidenceSearch, setEvidenceSearch] = useState("");
+  const [evidenceSourceFilter, setEvidenceSourceFilter] = useState("all");
+  const [evidenceIntegrityFilter, setEvidenceIntegrityFilter] = useState("all");
+  const [timelineSearch, setTimelineSearch] = useState("");
+  const [timelineSourceFilter, setTimelineSourceFilter] = useState("all");
+  const [timelineRange, setTimelineRange] = useState("all");
   const [selectedFile, setSelectedFile] = useState(null);
   const [evidenceInputKey, setEvidenceInputKey] = useState(0);
   const [sourceType, setSourceType] = useState("authentication");
@@ -86,6 +119,9 @@ function App() {
     nodes: [],
     edges: [],
   });
+  const [graphSearch, setGraphSearch] = useState("");
+  const [graphSourceFilter, setGraphSourceFilter] = useState("all");
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
   // What-If Simulator state
   const [selectedEvidenceId, setSelectedEvidenceId] = useState("");
   const [scenarioName, setScenarioName] = useState(
@@ -106,26 +142,18 @@ function App() {
     setInvestigationSummary(null);
     setTimelineRecords([]);
     setGraphData({ nodes: [], edges: [] });
+    setGraphSearch("");
+    setGraphSourceFilter("all");
+    setReportPreviewOpen(false);
     setSimulationResult(null);
     setSimulationComparison(null);
     setScenarioId(null);
     setAuditHistory([]);
     setSelectedEvidenceId("");
     setSelectedEvidence(null);
+    setSelectedEvidenceSourceId("");
+    setSelectedForensicRecordId("");
   }, []);
-  // Prepare actual evidence records received from the backend.
-  const filteredEvidence = evidenceRecords.map((record) => ({
-    id: record.evidence_id,
-    name:
-      record.file_path ||
-      record.operation ||
-      record.original_event_type ||
-      record.event_type ||
-      record.raw_record_reference ||
-      record.evidence_id,
-    type: record.source_type,
-    status: "Processed",
-  }));
 
   const refreshInvestigations = useCallback(async (updatedDetail) => {
     setInvestigationsLoading(true);
@@ -256,12 +284,17 @@ function App() {
     setInvestigationSummary(null);
     setTimelineRecords([]);
     setGraphData({ nodes: [], edges: [] });
+    setGraphSearch("");
+    setGraphSourceFilter("all");
+    setReportPreviewOpen(false);
     setSimulationResult(null);
     setSimulationComparison(null);
     setScenarioId(null);
     setAuditHistory([]);
     setSelectedEvidenceId("");
     setSelectedEvidence(null);
+    setSelectedEvidenceSourceId("");
+    setSelectedForensicRecordId("");
 
     try {
       const detail = await requestJson(
@@ -400,16 +433,29 @@ function App() {
     (id) => {
       setWorkspaceNotice("");
       setWorkspaceError("");
-      setActivePage("Dashboard");
+      setActivePage(
+        currentUser?.role === "ADMIN" ? "Evidence Explorer" : "Dashboard"
+      );
       if (id === investigationId) {
         loadInvestigation(id).catch(() => {});
       } else {
+        setSelectedEvidenceSourceId("");
+        setSelectedForensicRecordId("");
+        setGraphSearch("");
+        setGraphSourceFilter("all");
+        setReportPreviewOpen(false);
+        setEvidenceSearch("");
+        setEvidenceSourceFilter("all");
+        setEvidenceIntegrityFilter("all");
+        setTimelineSearch("");
+        setTimelineSourceFilter("all");
+        setTimelineRange("all");
         setInvestigation(null);
         setWorkspaceLoading(true);
         setInvestigationId(id);
       }
     },
-    [investigationId, loadInvestigation]
+    [currentUser?.role, investigationId, loadInvestigation]
   );
 
   const handleInvestigationCreated = async (created) => {
@@ -418,7 +464,20 @@ function App() {
     setWorkspaceNotice(
       `Investigation created successfully. ID: ${created.investigation_id}`
     );
-    setActivePage("Dashboard");
+    setSelectedEvidenceSourceId("");
+    setSelectedForensicRecordId("");
+    setGraphSearch("");
+    setGraphSourceFilter("all");
+    setReportPreviewOpen(false);
+    setEvidenceSearch("");
+    setEvidenceSourceFilter("all");
+    setEvidenceIntegrityFilter("all");
+    setTimelineSearch("");
+    setTimelineSourceFilter("all");
+    setTimelineRange("all");
+    setActivePage(
+      currentUser?.role === "ADMIN" ? "Evidence Explorer" : "Dashboard"
+    );
     setInvestigation(null);
     setWorkspaceLoading(true);
     setInvestigationId(created.investigation_id);
@@ -571,21 +630,195 @@ function App() {
     : Array.isArray(analysisResult?.detection?.findings)
       ? analysisResult.detection.findings
       : [];
-  const severityBreakdown = findingsList.reduce((counts, finding) => {
-    const severity = String(finding.severity || "Unspecified").toUpperCase();
-    counts[severity] = (counts[severity] || 0) + 1;
-    return counts;
-  }, {});
-  const severityEntries = Object.entries(severityBreakdown).sort(
-    ([left], [right]) => left.localeCompare(right)
-  );
   const evidenceFiles = investigation?.evidence_files || [];
-  const recentEvidenceFiles = [...evidenceFiles]
-    .sort(
-      (left, right) =>
-        new Date(right.acquired_at || 0) - new Date(left.acquired_at || 0)
-    )
-    .slice(0, 5);
+  const evidenceFilesBySourceId = new Map(
+    evidenceFiles.map((file) => [file.source_id, file])
+  );
+  const getFileForRecord = (record) =>
+    evidenceFilesBySourceId.get(record?.source_id);
+  const fileHasHash = (file) => Boolean(file?.sha256);
+  const recordHasHashes = (record) => {
+    const file = getFileForRecord(record);
+    return Boolean(file?.sha256 && record?.record_sha256);
+  };
+  const evidenceSearchTerm = evidenceSearch.trim().toLowerCase();
+  const filteredEvidenceFiles = evidenceFiles.filter((file) => {
+    const relatedRecords = evidenceRecords.filter(
+      (record) => record.source_id === file.source_id
+    );
+    const matchesSearch =
+      !evidenceSearchTerm ||
+      [
+        file.filename,
+        file.source_id,
+        file.source_type,
+        file.acquired_at,
+        file.file_extension,
+        file.sha256,
+        ...relatedRecords.flatMap((record) => [
+          record.evidence_id,
+          record.event_type,
+          record.original_event_type,
+          record.timestamp,
+          record.user_id,
+          record.ip_address,
+          record.file_path,
+          record.operation,
+        ]),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(evidenceSearchTerm);
+    const matchesSource =
+      evidenceSourceFilter === "all" ||
+      file.source_type === evidenceSourceFilter;
+    const hasHashes = fileHasHash(file);
+    const matchesIntegrity =
+      evidenceIntegrityFilter === "all" ||
+      (evidenceIntegrityFilter === "recorded" && hasHashes) ||
+      (evidenceIntegrityFilter === "incomplete" && !hasHashes);
+    return matchesSearch && matchesSource && matchesIntegrity;
+  });
+  const timelineTimes = timelineRecords
+    .map((record) => getTimestampMillis(record.timestamp))
+    .filter(Number.isFinite);
+  const latestTimelineTimestamp = timelineTimes.length
+    ? Math.max(...timelineTimes)
+    : Number.NaN;
+  const timelineRangeDurations = {
+    "24h": 24 * 60 * 60 * 1000,
+    "7d": 7 * 24 * 60 * 60 * 1000,
+    "30d": 30 * 24 * 60 * 60 * 1000,
+  };
+  const timelineRangeDuration = timelineRangeDurations[timelineRange];
+  const timelineSearchTerm = timelineSearch.trim().toLowerCase();
+  const filteredTimelineRecords = timelineRecords.filter((record) => {
+    const timestamp = getTimestampMillis(record.timestamp);
+    const file = getFileForRecord(record);
+    const matchesRange =
+      !timelineRangeDuration ||
+      !Number.isFinite(timestamp) ||
+      !Number.isFinite(latestTimelineTimestamp) ||
+      timestamp >= latestTimelineTimestamp - timelineRangeDuration;
+    const matchesSource =
+      timelineSourceFilter === "all" ||
+      record.source_type === timelineSourceFilter;
+    const matchesSearch =
+      !timelineSearchTerm ||
+      [
+        record.evidence_id,
+        record.source_id,
+        record.event_type,
+        record.original_event_type,
+        record.source_type,
+        record.timestamp,
+        record.original_timestamp,
+        record.user_id,
+        record.ip_address,
+        record.source_ip,
+        record.destination_ip,
+        record.host_id,
+        record.file_path,
+        record.operation,
+        file?.filename,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(timelineSearchTerm);
+    return matchesRange && matchesSource && matchesSearch;
+  });
+  const selectedForensicRecord = evidenceRecords.find(
+    (record) => record.evidence_id === selectedForensicRecordId
+  );
+  const selectedForensicFile =
+    evidenceFiles.find(
+      (file) => file.source_id === selectedEvidenceSourceId
+    ) || getFileForRecord(selectedForensicRecord);
+  const selectedFileRecords = selectedForensicFile
+    ? evidenceRecords.filter(
+        (record) => record.source_id === selectedForensicFile.source_id
+      )
+    : [];
+  const selectedTimelineRecord = timelineRecords.find(
+    (record) => record.evidence_id === selectedForensicRecordId
+  );
+  const selectedTimelineIndex = filteredTimelineRecords.findIndex(
+    (record) => record.evidence_id === selectedForensicRecordId
+  );
+  const graphRecordById = new Map(
+    evidenceRecords.map((record) => [record.evidence_id, record])
+  );
+  const graphSearchTerm = graphSearch.trim().toLowerCase();
+  const filteredGraphNodes = graphData.nodes.filter((node) => {
+    const record = graphRecordById.get(node.id);
+    const matchesSource =
+      graphSourceFilter === "all" ||
+      record?.source_type === graphSourceFilter;
+    const matchesSearch =
+      !graphSearchTerm ||
+      [
+        node.id,
+        node.node_type,
+        node.event_type,
+        node.timestamp,
+        node.user_id,
+        record?.source_type,
+        record?.source_id,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(graphSearchTerm);
+    return matchesSource && matchesSearch;
+  });
+  const visibleGraphNodeIds = new Set(
+    filteredGraphNodes.map((node) => node.id)
+  );
+  const filteredGraphEdges = graphData.edges.filter(
+    (edge) =>
+      visibleGraphNodeIds.has(edge.source) &&
+      visibleGraphNodeIds.has(edge.target)
+  );
+  const graphColumns = 4;
+  const graphRows = Math.ceil(filteredGraphNodes.length / graphColumns);
+  const graphCanvasHeight =
+    graphRows > 1 ? graphRows * 140 + 80 : 590;
+  const graphNodePositions = new Map(
+    filteredGraphNodes.map((node, index) => {
+      const row = Math.floor(index / graphColumns);
+      const column = index % graphColumns;
+      const nodesInRow = Math.min(
+        graphColumns,
+        filteredGraphNodes.length - row * graphColumns
+      );
+      const position = {
+        x: ((column + 0.5) * 1000) / nodesInRow,
+        y:
+          graphRows === 1
+            ? graphCanvasHeight / 2
+            : 70 + row * 140,
+      };
+      return [node.id, { node, ...position }];
+    })
+  );
+  const selectedGraphNode = graphData.nodes.find(
+    (node) => node.id === selectedEvidence?.id
+  );
+  const selectedGraphRecord = selectedGraphNode
+    ? graphRecordById.get(selectedGraphNode.id)
+    : null;
+  const selectedGraphNodeIsVisible = filteredGraphNodes.some(
+    (node) => node.id === selectedGraphNode?.id
+  );
+  const selectedGraphEdges = selectedGraphNode
+    ? graphData.edges.filter(
+        (edge) =>
+          edge.source === selectedGraphNode.id ||
+          edge.target === selectedGraphNode.id
+      )
+    : [];
   const totalFindings =
     investigationSummary?.total_findings ??
     findingsData?.total_findings ??
@@ -597,7 +830,7 @@ function App() {
     analysisResult?.anomaly_detection?.anomaly_count ??
     0;
   const visibleMenuItems = menuItems.filter((item) => {
-    if (item.label === "Admin Dashboard") {
+    if (item.label === "Administration") {
       return currentUser?.role === "ADMIN";
     }
     if (item.label === "What-If Simulator") {
@@ -639,8 +872,26 @@ function App() {
   }
 
   return (
-    <div className="app-container">
-      <aside className="sidebar">
+    <div
+      className={`app-container ${
+        effectivePage === "Dashboard"
+          ? "dashboard-shell"
+          : effectivePage === "Investigations"
+            ? "investigations-shell"
+            : effectivePage === "Administration"
+              ? "admin-shell"
+            : [
+                  "Evidence Explorer",
+                  "Incident Timeline",
+                  "Evidence Graph",
+                  "What-If Simulator",
+                  "Reports",
+                ].includes(effectivePage)
+              ? "forensic-workspace-shell"
+              : ""
+      }`}
+    >
+      <header className="app-navigation">
         <div className="brand">
           <div className="brand-logo">TF</div>
 
@@ -650,15 +901,14 @@ function App() {
           </div>
         </div>
 
-        <p className="menu-heading">WORKSPACE</p>
-
-        <nav>
+        <nav className="app-navigation-links" aria-label="Primary navigation">
           {visibleMenuItems.map((item) => (
             <button
               key={item.label}
               className={`nav-item ${
                 effectivePage === item.label ? "active" : ""
               }`}
+              aria-current={effectivePage === item.label ? "page" : undefined}
               onClick={() => setActivePage(item.label)}
             >
               <span className="nav-icon">{item.icon}</span>
@@ -667,22 +917,30 @@ function App() {
           ))}
         </nav>
 
-        <div className="sidebar-footer">
+        <div className="app-navigation-account">
           <div className="user-avatar">
             {currentUser.username.slice(0, 1).toUpperCase()}
           </div>
 
-          <div>
+          <div className="app-navigation-identity">
             <strong>{currentUser.username}</strong>
             <small>{currentUser.role.replaceAll("_", " ")}</small>
           </div>
+          <button
+            className="app-navigation-signout"
+            onClick={handleLogout}
+          >
+            Sign out
+          </button>
         </div>
-      </aside>
+      </header>
 
       <main className="main-content">
         <header className="topbar">
           <div className="topbar-title">
-            {investigation && effectivePage !== "Investigations" && (
+            {investigation &&
+              effectivePage !== "Investigations" &&
+              effectivePage !== "Dashboard" && (
               <div
                 className={`selected-investigation-context ${
                   effectivePage === "Dashboard" ? "dashboard-context" : ""
@@ -697,17 +955,11 @@ function App() {
                 <small>{investigation.investigation_id}</small>
               </div>
             )}
-            <span className="eyebrow">
-              {effectivePage === "Investigations"
-                ? "CASE MANAGEMENT"
-                : effectivePage === "Dashboard"
-                  ? "CASE OVERVIEW"
-                  : "INVESTIGATION WORKSPACE"}
-            </span>
             <h1>{effectivePage}</h1>
           </div>
           <div className="topbar-actions">
-            {effectivePage !== "Investigations" && (
+            {effectivePage !== "Investigations" &&
+              effectivePage !== "Dashboard" && (
               <button
                 className="secondary-button"
                 onClick={() => setActivePage("Investigations")}
@@ -715,167 +967,46 @@ function App() {
                 All Investigations
               </button>
             )}
-            <button
-              className="secondary-button"
-              onClick={handleLogout}
-            >
-              Sign out
-            </button>
           </div>
         </header>
 
         {/* DASHBOARD */}
-        {effectivePage === "Admin Dashboard" ? (
+        {effectivePage === "Administration" ? (
           <AdminDashboard />
         ) : effectivePage === "Dashboard" ? (
-          !investigation ? (
-            <section className="management-card management-empty dashboard-empty">
-              {workspaceLoading ? (
-                <p className="management-state" role="status">
-                  Loading investigation...
-                </p>
-              ) : workspaceError ? (
-                <>
-                  <h2>Investigation unavailable</h2>
-                  <p className="management-message error-message" role="alert">
-                    {workspaceError}
-                  </p>
-                  {investigationId && (
-                    <button
-                      className="secondary-button"
-                      onClick={() =>
-                        loadInvestigation(investigationId).catch(() => {})
-                      }
-                    >
-                      Retry
-                    </button>
-                  )}
-                  <button
-                    className="text-button"
-                    onClick={() => setActivePage("Investigations")}
-                  >
-                    All Investigations
-                  </button>
-                </>
-              ) : (
-                <>
-                  <h2>No investigation selected</h2>
-                  <p>Open an investigation to view its dashboard and analysis.</p>
-                  <button
-                    className="primary-button"
-                    onClick={() => setActivePage("Investigations")}
-                  >
-                    All Investigations
-                  </button>
-                </>
-              )}
-            </section>
+          currentUser.role === "ADMIN" ? (
+            <AdministratorDashboard
+              username={currentUser.username}
+              investigationCount={investigations.length}
+              investigationsLoading={
+                investigationsLoading || Boolean(investigationsError)
+              }
+              onManageAccess={() => setActivePage("Administration")}
+              onManageInvestigations={() => setActivePage("Investigations")}
+            />
           ) : (
-            <>
-              {workspaceNotice && (
-                <p className="management-message success-message" role="status">
-                  {workspaceNotice}
-                </p>
-              )}
-              {workspaceError && (
-                <p className="management-message error-message" role="alert">
-                  {workspaceError}
-                </p>
-              )}
-
-              <section className="welcome-card dashboard-case-card">
-                <div>
-                  <span className="eyebrow">INVESTIGATION STATUS</span>
-                  <p>
-                    {investigation.description ||
-                      "Review evidence and analysis for this investigation."}
-                  </p>
-                </div>
-                <span className="status-pill">{investigation.status}</span>
-              </section>
-
-              {workspaceLoading && (
-                <p className="management-state" role="status">
-                  Refreshing investigation data...
-                </p>
-              )}
-
-              <section className="stats-grid dashboard-stats-grid">
-                {[
-                  ["Evidence Files", evidenceFiles.length],
-                  ["Total Findings", totalFindings],
-                  ["Total Anomalies", totalAnomalies],
-                ].map(([label, value]) => (
-                  <div className="stat-card" key={label}>
-                    <div className="stat-top">
-                      <span>{label}</span>
-                    </div>
-                    <h2>{value}</h2>
-                    <p>{investigation.name}</p>
-                  </div>
-                ))}
-              </section>
-
-              <div className="dashboard-details-grid">
-                <section className="information-card severity-card">
-                  <h3>Severity Breakdown</h3>
-                  {severityEntries.length ? (
-                    severityEntries.map(([severity, count]) => (
-                      <div className="severity-row" key={severity}>
-                        <span className={`severity-label severity-${severity.toLowerCase()}`}>
-                          {severity}
-                        </span>
-                        <div
-                          className="severity-track"
-                          role="progressbar"
-                          aria-label={`${severity} findings`}
-                          aria-valuemin="0"
-                          aria-valuemax={findingsList.length}
-                          aria-valuenow={count}
-                        >
-                          <span
-                            style={{
-                              width: `${(count / findingsList.length) * 100}%`,
-                            }}
-                          />
-                        </div>
-                        <strong>{count}</strong>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="management-state">
-                      No findings are available for severity analysis.
-                    </p>
-                  )}
-                </section>
-
-                <section className="information-card recent-evidence-card">
-                  <h3>Recent Evidence Activity</h3>
-                  {recentEvidenceFiles.length ? (
-                    <div className="recent-evidence-list">
-                      {recentEvidenceFiles.map((file) => (
-                        <div
-                          className="recent-evidence-item"
-                          key={file.source_id}
-                        >
-                          <div>
-                            <strong>{file.filename}</strong>
-                            <span>{file.source_type}</span>
-                          </div>
-                          <time dateTime={file.acquired_at}>
-                            {formatDate(file.acquired_at)}
-                          </time>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="management-state">
-                      No evidence files have been added to this investigation.
-                    </p>
-                  )}
-                </section>
-              </div>
-            </>
+            <InvestigatorDashboard
+              username={currentUser.username}
+              investigations={investigations}
+              loading={investigationsLoading}
+              error={investigationsError}
+              onRetry={refreshInvestigations}
+              onOpenInvestigation={openInvestigation}
+              onViewAll={() => setActivePage("Investigations")}
+              selectedInvestigationId={investigationId}
+              investigation={investigation}
+              workspaceLoading={workspaceLoading}
+              workspaceError={workspaceError}
+              workspaceNotice={workspaceNotice}
+              evidenceFiles={evidenceFiles}
+              evidenceRecords={evidenceRecords}
+              findings={findingsList}
+              totalFindings={totalFindings}
+              totalAnomalies={totalAnomalies}
+              canCreate={currentUser.role === "ADMIN"}
+              onCreate={() => setShowCreateModal(true)}
+              onContinue={() => setActivePage("Evidence Explorer")}
+            />
           )
         ) : effectivePage === "Investigations" ? (
           <InvestigationList
@@ -886,6 +1017,10 @@ function App() {
             onOpen={openInvestigation}
             onCreate={() => setShowCreateModal(true)}
             canCreate={currentUser.role === "ADMIN"}
+            canUpdate={
+              currentUser.role === "ADMIN" ||
+              currentUser.role === "LEAD_INVESTIGATOR"
+            }
           />
         ) : !investigation ? (
           <section className="management-card management-empty">
@@ -929,50 +1064,23 @@ function App() {
             )}
           </section>
         ) : effectivePage === "Evidence Explorer" ? (
-          /* EVIDENCE EXPLORER */
           <section className="evidence-page">
-            <div className="page-heading">
-              <div>
-                <span className="eyebrow">
-                  INVESTIGATION WORKSPACE
-                </span>
-
-                <h2>Evidence Explorer</h2>
-
+            <header className="forensic-page-heading">
+              <div className="forensic-page-intro">
                 <p>
-                  View and examine digital evidence collected during
-                  investigations.
+                  Inspect acquired source files and the normalized forensic
+                  records extracted from them.
                 </p>
               </div>
-            </div>
-
-            <div className="selected-case-strip">
-              <span className="eyebrow">CURRENT INVESTIGATION</span>
-              <strong>{investigation.name}</strong>
-              <small>{investigation.investigation_id}</small>
-            </div>
-
-            {workspaceError && (
-              <p className="management-message error-message" role="alert">
-                {workspaceError}
-              </p>
-            )}
-            {workspaceNotice && (
-              <p className="management-message success-message" role="status">
-                {workspaceNotice}
-              </p>
-            )}
-
-            {canUploadEvidence ? (
-              <div className="information-card">
-                <p>
-                  Add evidence to this investigation. New files are analyzed
-                  together with its existing evidence.
-                </p>
+              {canUploadEvidence ? (
                 <form
-                  className="workspace-upload-form evidence-upload-form"
+                  className="evidence-upload-panel"
                   onSubmit={handleEvidenceUpload}
                 >
+                  <div>
+                    <span className="eyebrow">INGEST EVIDENCE</span>
+                    <p>New files join this investigation's combined analysis.</p>
+                  </div>
                   <label>
                     Evidence file
                     <input
@@ -993,7 +1101,7 @@ function App() {
                       disabled={evidenceUploading}
                     >
                       <option value="authentication">Authentication</option>
-                      <option value="file">File Activity</option>
+                      <option value="file">File activity</option>
                       <option value="network">Network</option>
                       <option value="archive">Archive</option>
                     </select>
@@ -1004,441 +1112,1097 @@ function App() {
                     disabled={!selectedFile || evidenceUploading}
                   >
                     {evidenceUploading
-                      ? "Analyzing evidence..."
-                      : "Add Evidence"}
+                      ? "Analyzing..."
+                      : "Add evidence"}
                   </button>
-                </form>
-                {evidenceUploading && (
-                  <p className="upload-progress" role="status">
-                    Uploading and analyzing combined investigation evidence...
+                  <p className="evidence-upload-help">
+                    .log, .txt, .csv or .json · Maximum 10 MB
                   </p>
-                )}
-              </div>
-            ) : (
-              <div className="information-card">
-                <h3>Read-only access</h3>
-                <p>
-                  Your Viewer role allows you to review evidence but not upload
-                  or modify it.
-                </p>
-              </div>
+                  {evidenceUploading && (
+                    <p className="upload-progress" role="status">
+                      Uploading and analyzing combined investigation evidence...
+                    </p>
+                  )}
+                </form>
+              ) : (
+                <div className="evidence-access-note">
+                  <span className="eyebrow">READ-ONLY ACCESS</span>
+                  <p>Your role can inspect evidence but cannot upload files.</p>
+                </div>
+              )}
+            </header>
+
+            {workspaceError && (
+              <p className="forensic-message forensic-error" role="alert">
+                {workspaceError}
+              </p>
+            )}
+            {workspaceNotice && (
+              <p className="forensic-message forensic-success" role="status">
+                {workspaceNotice}
+              </p>
             )}
 
-            <div className="information-card evidence-files-card">
-              <h3>Evidence Files</h3>
-              {evidenceFiles.length ? (
-                <div className="evidence-file-list">
-                  {evidenceFiles.map((file) => (
-                    <article
-                      className="evidence-file-item"
-                      key={file.source_id}
-                    >
-                      <div className="evidence-file-heading">
-                        <strong>{file.filename}</strong>
-                        <span className="status-pill">{file.source_type}</span>
-                      </div>
-                      <p>
-                        {(file.file_size_bytes / 1024).toFixed(1)} KB
-                        {" · "}
-                        {formatDate(file.acquired_at)}
-                      </p>
-                      <code title={file.sha256}>{file.sha256}</code>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p className="management-state">
-                  No evidence files have been added to this investigation.
-                </p>
-              )}
+            <div className="evidence-overview" aria-label="Evidence overview">
+              <div>
+                <span>Source files</span>
+                <strong>{evidenceFiles.length}</strong>
+              </div>
+              <div>
+                <span>Normalized records</span>
+                <strong>{evidenceRecords.length}</strong>
+              </div>
+              <div>
+                <span>Files with SHA-256</span>
+                <strong>{evidenceFiles.filter(fileHasHash).length}</strong>
+              </div>
             </div>
 
-            <div className="information-card">
-              <h3>Evidence Records</h3>
-              <p>
-                Processed records belonging to {investigation.name}.
-              </p>
-              <table className="evidence-table">
-                <thead>
-                  <tr>
-                    <th>Evidence ID</th>
-                    <th>Evidence Name</th>
-                    <th>Evidence Type</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
+            <div className="evidence-workspace">
+              <section className="evidence-register" aria-label="Evidence files">
+                <div className="forensic-panel-heading">
+                  <div>
+                    <span className="eyebrow">INVESTIGATION RECORD</span>
+                    <h3>Source files</h3>
+                  </div>
+                  <span className="forensic-result-count">
+                    {filteredEvidenceFiles.length} of {evidenceFiles.length}
+                  </span>
+                </div>
 
-                <tbody>
-                  {filteredEvidence.length > 0 ? (
-                    filteredEvidence.map((evidence) => (
-                      <tr key={evidence.id}>
-                        <td>{evidence.id}</td>
-                        <td>{evidence.name}</td>
-                        <td>{evidence.type}</td>
-                        <td>{evidence.status}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="4">
-                        No evidence records are available for this investigation.
-                      </td>
-                    </tr>
+                <div className="forensic-filters evidence-filters">
+                  <label>
+                    Search evidence
+                    <input
+                      type="search"
+                      value={evidenceSearch}
+                      onChange={(event) => setEvidenceSearch(event.target.value)}
+                      placeholder="Filename, source ID, event, user..."
+                    />
+                  </label>
+                  <label>
+                    Source type
+                    <select
+                      value={evidenceSourceFilter}
+                      onChange={(event) =>
+                        setEvidenceSourceFilter(event.target.value)
+                      }
+                    >
+                      <option value="all">All source types</option>
+                      {Object.entries(evidenceSourceLabels).map(
+                        ([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        )
+                      )}
+                    </select>
+                  </label>
+                  <label>
+                    Integrity metadata
+                    <select
+                      value={evidenceIntegrityFilter}
+                      onChange={(event) =>
+                        setEvidenceIntegrityFilter(event.target.value)
+                      }
+                    >
+                      <option value="all">All files</option>
+                      <option value="recorded">File SHA-256 present</option>
+                      <option value="incomplete">SHA-256 unavailable</option>
+                    </select>
+                  </label>
+                </div>
+
+                {workspaceLoading ? (
+                  <p className="forensic-empty-state" role="status">
+                    Loading evidence records...
+                  </p>
+                ) : evidenceFiles.length === 0 ? (
+                  <div className="forensic-empty-state">
+                    <h4>No source files yet</h4>
+                    <p>
+                      {canUploadEvidence
+                        ? "Upload a supported evidence file to begin inspection."
+                        : "No evidence files are associated with this investigation."}
+                    </p>
+                  </div>
+                ) : filteredEvidenceFiles.length === 0 ? (
+                  <div className="forensic-empty-state">
+                    <h4>No matching evidence</h4>
+                    <p>Adjust or clear the search and filters.</p>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => {
+                        setEvidenceSearch("");
+                        setEvidenceSourceFilter("all");
+                        setEvidenceIntegrityFilter("all");
+                      }}
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                ) : (
+                  <div className="evidence-file-list">
+                    {filteredEvidenceFiles.map((file) => {
+                      const fileRecordCount = evidenceRecords.filter(
+                        (record) => record.source_id === file.source_id
+                      ).length;
+                      const hashesAvailable = fileHasHash(file);
+                      return (
+                        <button
+                          className={`evidence-file-row ${
+                            selectedEvidenceSourceId === file.source_id
+                              ? "is-selected"
+                              : ""
+                          }`}
+                          key={file.source_id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedEvidenceSourceId(file.source_id);
+                            setSelectedForensicRecordId("");
+                          }}
+                        >
+                          <span className="evidence-file-row-main">
+                            <span className="evidence-file-row-topline">
+                              <span
+                                className={`evidence-source-badge ${file.source_type}`}
+                              >
+                                {getEvidenceSourceLabel(file.source_type)}
+                              </span>
+                              <span
+                                className={`evidence-integrity-badge ${
+                                  hashesAvailable ? "is-recorded" : "is-missing"
+                                }`}
+                              >
+                                {hashesAvailable
+                                  ? "SHA-256 recorded"
+                                  : "SHA-256 unavailable"}
+                              </span>
+                            </span>
+                            <strong>{file.filename}</strong>
+                            <span className="evidence-file-row-meta">
+                              {file.source_id}
+                              <span aria-hidden="true">·</span>
+                              {file.file_extension || "Unknown format"}
+                              <span aria-hidden="true">·</span>
+                              {fileRecordCount}{" "}
+                              {fileRecordCount === 1 ? "record" : "records"}
+                            </span>
+                          </span>
+                          <span className="evidence-file-row-time">
+                            <span>Acquired</span>
+                            <time dateTime={file.acquired_at}>
+                              {file.acquired_at || "Timestamp unavailable"}
+                            </time>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <aside className="evidence-inspector" aria-label="Evidence details">
+                <div className="forensic-panel-heading">
+                  <div>
+                    <span className="eyebrow">INSPECTION PANEL</span>
+                    <h3>Evidence details</h3>
+                  </div>
+                  {selectedForensicFile && (
+                    <span className="forensic-selected-mark">Selected</span>
                   )}
-                </tbody>
-              </table>
+                </div>
+
+                {selectedForensicFile ? (
+                  <>
+                    <div className="evidence-inspector-file">
+                      <span
+                        className={`evidence-source-badge ${selectedForensicFile.source_type}`}
+                      >
+                        {getEvidenceSourceLabel(selectedForensicFile.source_type)}
+                      </span>
+                      <h4>{selectedForensicFile.filename}</h4>
+                      <code>{selectedForensicFile.source_id}</code>
+                    </div>
+
+                    <dl className="forensic-metadata-grid">
+                      {[
+                        {
+                          label: "File format",
+                          value: selectedForensicFile.file_extension,
+                        },
+                        {
+                          label: "File size",
+                          value:
+                            selectedForensicFile.file_size_bytes != null
+                              ? `${Number(
+                                  selectedForensicFile.file_size_bytes
+                                ).toLocaleString()} bytes`
+                              : null,
+                        },
+                        {
+                          label: "Acquired at",
+                          value: selectedForensicFile.acquired_at,
+                        },
+                        {
+                          label: "Acquisition integrity",
+                          value:
+                            selectedForensicFile.integrity_status ||
+                            "Unavailable",
+                        },
+                        {
+                          label: "File SHA-256",
+                          value: selectedForensicFile.sha256,
+                          isHash: true,
+                        },
+                      ]
+                        .filter(
+                          (item) =>
+                            item.value !== undefined &&
+                            item.value !== null &&
+                            item.value !== ""
+                        )
+                        .map((item) => (
+                          <div
+                            className="forensic-metadata-item"
+                            key={item.label}
+                          >
+                            <dt>{item.label}</dt>
+                            <dd className={item.isHash ? "hash-value" : ""}>
+                              {item.value}
+                            </dd>
+                          </div>
+                        ))}
+                    </dl>
+                    <p className="forensic-integrity-note">
+                      The file hash and acquisition status are the values
+                      recorded by the backend at ingestion; this view does not
+                      perform a new file re-hash.
+                    </p>
+
+                    <div className="evidence-associated-records">
+                      <div className="forensic-subheading">
+                        <h4>Extracted records</h4>
+                        <span>{selectedFileRecords.length}</span>
+                      </div>
+                      {selectedFileRecords.length ? (
+                        <div className="associated-record-list">
+                          {selectedFileRecords.map((record) => (
+                            <div
+                              className={`associated-record-row ${
+                                selectedForensicRecordId === record.evidence_id
+                                  ? "is-selected"
+                                  : ""
+                              }`}
+                              key={record.evidence_id}
+                            >
+                              <button
+                                className="associated-record-select"
+                                type="button"
+                                onClick={() =>
+                                  setSelectedForensicRecordId(
+                                    record.evidence_id
+                                  )
+                                }
+                              >
+                                <strong>
+                                  {record.event_type ||
+                                    record.original_event_type ||
+                                    "Evidence event"}
+                                </strong>
+                                <code>{record.evidence_id}</code>
+                                <time dateTime={record.timestamp}>
+                                  {record.original_timestamp ||
+                                    record.timestamp ||
+                                    "Timestamp unavailable"}
+                                </time>
+                              </button>
+                              <button
+                                className="text-action"
+                                type="button"
+                                onClick={() => {
+                                  setSelectedEvidenceSourceId(
+                                    selectedForensicFile.source_id
+                                  );
+                                  setSelectedForensicRecordId(
+                                    record.evidence_id
+                                  );
+                                  setActivePage("Incident Timeline");
+                                }}
+                                disabled={
+                                  !timelineRecords.some(
+                                    (event) =>
+                                      event.evidence_id === record.evidence_id
+                                  )
+                                }
+                              >
+                                View event
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="forensic-secondary-copy">
+                          No normalized event records are linked to this file.
+                        </p>
+                      )}
+                    </div>
+
+                    {selectedForensicRecord?.source_id ===
+                      selectedForensicFile.source_id && (
+                      <div className="selected-record-details">
+                        <div className="forensic-subheading">
+                          <h4>Record inspection</h4>
+                          {recordHasHashes(selectedForensicRecord) && (
+                            <span className="forensic-integrity-badge is-recorded">
+                              Record hash present
+                            </span>
+                          )}
+                        </div>
+                        <dl className="forensic-record-fields">
+                          {[
+                            ["Event time", selectedForensicRecord.timestamp],
+                            [
+                              "Original timestamp",
+                              selectedForensicRecord.original_timestamp,
+                            ],
+                            ["User", selectedForensicRecord.user_id],
+                            ["IP address", selectedForensicRecord.ip_address],
+                            ["Source IP", selectedForensicRecord.source_ip],
+                            [
+                              "Destination IP",
+                              selectedForensicRecord.destination_ip,
+                            ],
+                            ["Host", selectedForensicRecord.host_id],
+                            ["File path", selectedForensicRecord.file_path],
+                            ["Operation", selectedForensicRecord.operation],
+                            [
+                              "Transfer size",
+                              selectedForensicRecord.transfer_size_bytes,
+                            ],
+                            ["Archive ID", selectedForensicRecord.archive_id],
+                            [
+                              "Archive path",
+                              selectedForensicRecord.archive_path,
+                            ],
+                            [
+                              "Archive size",
+                              selectedForensicRecord.archive_size_bytes,
+                            ],
+                            [
+                              "Raw record reference",
+                              selectedForensicRecord.raw_record_reference,
+                            ],
+                            [
+                              "Record SHA-256",
+                              selectedForensicRecord.record_sha256,
+                            ],
+                          ]
+                            .filter(
+                              ([, value]) =>
+                                value !== undefined &&
+                                value !== null &&
+                                value !== ""
+                            )
+                            .map(([label, value]) => (
+                              <div
+                                className="forensic-record-field"
+                                key={label}
+                              >
+                                <dt>{label}</dt>
+                                <dd>{value}</dd>
+                              </div>
+                            ))}
+                        </dl>
+                      </div>
+                    )}
+                    <p className="forensic-preview-note">
+                      This panel displays preserved file metadata and
+                      normalized event records. The current API does not expose
+                      original file contents for in-browser preview.
+                    </p>
+                  </>
+                ) : (
+                  <div className="forensic-empty-state inspector-empty-state">
+                    <h4>Select a source file</h4>
+                    <p>
+                      Choose a file to inspect its acquisition metadata,
+                      integrity hash and linked event records.
+                    </p>
+                  </div>
+                )}
+              </aside>
             </div>
           </section>
         ) : effectivePage === "Incident Timeline" ? (
-          /* INCIDENT TIMELINE - REAL BACKEND DATA */
           <section className="timeline-page">
-            <div className="page-heading">
-              <div>
-                <span className="eyebrow">
-                  INVESTIGATION WORKSPACE
-                </span>
-
-                <h2>Incident Timeline</h2>
-
+            <header className="forensic-page-heading timeline-page-heading">
+              <div className="forensic-page-intro">
                 <p>
-                  View and track important events in chronological
-                  order.
+                  Reconstruct activity from the timestamps and source records
+                  in this investigation.
                 </p>
               </div>
-            </div>
-
-            <div className="information-card">
-              <h3>Investigation Activity</h3>
-
-              <p>
-                A chronological record of events identified during
-                the investigation.
-              </p>
-            </div>
-
-            <div className="timeline-container">
-              {timelineRecords.length > 0 ? (
-                timelineRecords.map((record, index) => (
-                  <div
-                    className="timeline-item"
-                    key={record.evidence_id || index}
-                  >
-                    <div className="timeline-dot"></div>
-
-                    <div className="timeline-content">
-                      <span className="timeline-time">
-                        {record.timestamp
-                          ? new Date(record.timestamp).toLocaleString()
-                          : "Timestamp unavailable"}
-                      </span>
-
-                      <h3>
-                        {record.event_type ||
-                          record.original_event_type ||
-                          "Evidence Event"}
-                      </h3>
-
-                      <p>
-                        {[
-                          record.source_type &&
-                            `Source: ${record.source_type}`,
-                          record.user_id &&
-                            `User: ${record.user_id}`,
-                          record.ip_address &&
-                            `IP: ${record.ip_address}`,
-                          record.file_path &&
-                            `File: ${record.file_path}`,
-                          record.operation &&
-                            `Operation: ${record.operation}`,
-                        ]
-                          .filter(Boolean)
-                          .join(" | ") ||
-                          "Evidence record received and processed."}
-                      </p>
-
-                      <span className="timeline-evidence">
-                        Evidence: {formatEvidenceId(record.evidence_id)}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="information-card">
-                  <h3>No Timeline Events</h3>
-
-                  <p>
-                    Add evidence from Evidence Explorer to view its events in
-                    chronological order.
-                  </p>
-                </div>
-              )}
-            </div>
-          </section>
+              <div className="timeline-context-count">
+                <strong>{filteredTimelineRecords.length}</strong>
+                <span>
+                  of {timelineRecords.length}{" "}
+                  {timelineRecords.length === 1 ? "event" : "events"} in view
+                </span>
+              </div>
+            </header>
         ) : effectivePage === "Evidence Graph" ? (
           /* EVIDENCE GRAPH - REAL BACKEND DATA */
           <section className="graph-page">
 
-            <div className="information-card">
-              <h3>Evidence Relationship Map</h3>
-
-              <p>
-                Visual representation of evidence items and their
-                associated relationships.
+            {workspaceError && (
+              <p className="forensic-message forensic-error" role="alert">
+                {workspaceError}
               </p>
+            )}
 
-              <p>
-                Evidence Nodes: {graphData.nodes.length} | Relationships:{" "}
-                {graphData.edges.length}
+            <div className="timeline-control-bar">
+              <label>
+                Find events
+                <input
+                  type="search"
+                  value={timelineSearch}
+                  onChange={(event) => setTimelineSearch(event.target.value)}
+                  placeholder="Event, evidence ID, user, IP..."
+                />
+              </label>
+              <label>
+                Source category
+                <select
+                  value={timelineSourceFilter}
+                  onChange={(event) =>
+                    setTimelineSourceFilter(event.target.value)
+                  }
+                >
+                  <option value="all">All categories</option>
+                  {Object.entries(evidenceSourceLabels).map(
+                    ([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    )
+                  )}
+                </select>
+              </label>
+              <label>
+                Time window
+                <select
+                  value={timelineRange}
+                  onChange={(event) => setTimelineRange(event.target.value)}
+                >
+                  <option value="all">All recorded time</option>
+                  <option value="24h">Latest 24 hours</option>
+                  <option value="7d">Latest 7 days</option>
+                  <option value="30d">Latest 30 days</option>
+                </select>
+              </label>
+              <p className="timeline-range-note">
+                Relative windows end at the latest timestamp in this
+                investigation.
+              </p>
+            </div>
+
+            <div className="timeline-workspace">
+              <section
+                className="chronology-panel"
+                aria-label="Chronological event timeline"
+              >
+                <div className="forensic-panel-heading">
+                  <div>
+                    <span className="eyebrow">EVENT SEQUENCE</span>
+                    <h3>Chronology</h3>
+                  </div>
+                  {filteredTimelineRecords.length > 0 && (
+                    <span className="forensic-result-count">
+                      {filteredTimelineRecords.length} shown
+                    </span>
+                  )}
+                </div>
+
+                {workspaceLoading ? (
+                  <p className="forensic-empty-state" role="status">
+                    Loading timeline events...
+                  </p>
+                ) : timelineRecords.length === 0 ? (
+                  <div className="forensic-empty-state">
+                    <h4>No timeline events</h4>
+                    <p>
+                      Add evidence in Evidence Explorer to create a
+                      timestamped event sequence.
+                    </p>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => setActivePage("Evidence Explorer")}
+                    >
+                      Open Evidence Explorer
+                    </button>
+                  </div>
+                ) : filteredTimelineRecords.length === 0 ? (
+                  <div className="forensic-empty-state">
+                    <h4>No events in this view</h4>
+                    <p>
+                      The selected time window or filters exclude all
+                      recorded events.
+                    </p>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => {
+                        setTimelineSearch("");
+                        setTimelineSourceFilter("all");
+                        setTimelineRange("all");
+                      }}
+                    >
+                      Show all events
+                    </button>
+                  </div>
+                ) : (
+                  <ol className="chronology-list">
+                    {filteredTimelineRecords.map((record, index) => (
+                      <li
+                        className={`chronology-item ${
+                          selectedForensicRecordId === record.evidence_id
+                            ? "is-selected"
+                            : ""
+                        }`}
+                        key={record.evidence_id}
+                      >
+                        <span
+                          className={`chronology-marker ${
+                            evidenceSourceLabels[record.source_type]
+                              ? record.source_type
+                              : "unknown"
+                          }`}
+                          aria-hidden="true"
+                        />
+                        <button
+                          className="chronology-event"
+                          type="button"
+                          onClick={() => {
+                            setSelectedForensicRecordId(record.evidence_id);
+                            setSelectedEvidenceSourceId(
+                              record.source_id || ""
+                            );
+                          }}
+                          aria-pressed={
+                            selectedForensicRecordId === record.evidence_id
+                          }
+                        >
+                          <span className="chronology-event-header">
+                            <time
+                              dateTime={record.timestamp}
+                              title={`Normalized timestamp: ${
+                                record.timestamp || "unavailable"
+                              }`}
+                            >
+                              {record.original_timestamp ||
+                                record.timestamp ||
+                                "Timestamp unavailable"}
+                            </time>
+                            <span
+                              className={`evidence-source-badge ${
+                                evidenceSourceLabels[record.source_type]
+                                  ? record.source_type
+                                  : "unknown"
+                              }`}
+                            >
+                              {getEvidenceSourceLabel(record.source_type)}
+                            </span>
+                          </span>
+                          <strong>
+                            {record.event_type ||
+                              record.original_event_type ||
+                              "Evidence event"}
+                          </strong>
+                          <span className="chronology-event-summary">
+                            {[
+                              record.user_id && `User ${record.user_id}`,
+                              record.ip_address &&
+                                `IP ${record.ip_address}`,
+                              record.file_path &&
+                                `File ${record.file_path}`,
+                              record.operation,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ") || "No additional event fields"}
+                          </span>
+                          <span className="chronology-event-footer">
+                            <code>{record.evidence_id}</code>
+                            <span>
+                              {index + 1} / {filteredTimelineRecords.length}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </section>
+
+              <aside className="timeline-inspector" aria-label="Selected event">
+                <div className="forensic-panel-heading">
+                  <div>
+                    <span className="eyebrow">EVENT INSPECTION</span>
+                    <h3>Selected event</h3>
+                  </div>
+                  {selectedTimelineRecord && (
+                    <div className="timeline-step-controls">
+                      <button
+                        className="timeline-step-button"
+                        type="button"
+                        aria-label="Previous event"
+                        disabled={
+                          filteredTimelineRecords.length === 0 ||
+                          selectedTimelineIndex === 0
+                        }
+                        onClick={() => {
+                          const targetIndex =
+                            selectedTimelineIndex === -1
+                              ? filteredTimelineRecords.length - 1
+                              : selectedTimelineIndex - 1;
+                          const target = filteredTimelineRecords[targetIndex];
+                          if (target) {
+                            setSelectedForensicRecordId(target.evidence_id);
+                            setSelectedEvidenceSourceId(
+                              target.source_id || ""
+                            );
+                          }
+                        }}
+                      >
+                        Prev
+                      </button>
+                      <button
+                        className="timeline-step-button"
+                        type="button"
+                        aria-label="Next event"
+                        disabled={
+                          filteredTimelineRecords.length === 0 ||
+                          selectedTimelineIndex ===
+                            filteredTimelineRecords.length - 1
+                        }
+                        onClick={() => {
+                          const targetIndex =
+                            selectedTimelineIndex === -1
+                              ? 0
+                              : selectedTimelineIndex + 1;
+                          const target = filteredTimelineRecords[targetIndex];
+                          if (target) {
+                            setSelectedForensicRecordId(target.evidence_id);
+                            setSelectedEvidenceSourceId(
+                              target.source_id || ""
+                            );
+                          }
+                        }}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {selectedTimelineRecord ? (
+                  <>
+                    {selectedTimelineIndex === -1 && (
+                      <div className="timeline-filter-notice">
+                        This selected event is outside the current timeline
+                        filters.
+                        <button
+                          className="text-action"
+                          type="button"
+                          onClick={() => {
+                            setTimelineSearch("");
+                            setTimelineSourceFilter("all");
+                            setTimelineRange("all");
+                          }}
+                        >
+                          Show it in the timeline
+                        </button>
+                      </div>
+                    )}
+                    <div className="timeline-selected-event">
+                      <span
+                        className={`evidence-source-badge ${
+                          evidenceSourceLabels[selectedTimelineRecord.source_type]
+                            ? selectedTimelineRecord.source_type
+                            : "unknown"
+                        }`}
+                      >
+                        {getEvidenceSourceLabel(
+                          selectedTimelineRecord.source_type
+                        )}
+                      </span>
+                      <h4>
+                        {selectedTimelineRecord.event_type ||
+                          selectedTimelineRecord.original_event_type ||
+                          "Evidence event"}
+                      </h4>
+                      <time dateTime={selectedTimelineRecord.timestamp}>
+                        {selectedTimelineRecord.original_timestamp ||
+                          selectedTimelineRecord.timestamp ||
+                          "Timestamp unavailable"}
+                      </time>
+                    </div>
+                    <dl className="forensic-record-fields timeline-fields">
+                      {[
+                        ["Evidence ID", selectedTimelineRecord.evidence_id],
+                        ["Source ID", selectedTimelineRecord.source_id],
+                        ["User", selectedTimelineRecord.user_id],
+                        ["IP address", selectedTimelineRecord.ip_address],
+                        ["Source IP", selectedTimelineRecord.source_ip],
+                        [
+                          "Destination IP",
+                          selectedTimelineRecord.destination_ip,
+                        ],
+                        ["Host", selectedTimelineRecord.host_id],
+                        ["File path", selectedTimelineRecord.file_path],
+                        ["Operation", selectedTimelineRecord.operation],
+                        [
+                          "Transfer size",
+                          selectedTimelineRecord.transfer_size_bytes,
+                        ],
+                        ["Archive ID", selectedTimelineRecord.archive_id],
+                        ["Archive path", selectedTimelineRecord.archive_path],
+                        [
+                          "Archive size",
+                          selectedTimelineRecord.archive_size_bytes,
+                        ],
+                        [
+                          "Raw record reference",
+                          selectedTimelineRecord.raw_record_reference,
+                        ],
+                      ]
+                        .filter(
+                          ([, value]) =>
+                            value !== undefined &&
+                            value !== null &&
+                            value !== ""
+                        )
+                        .map(([label, value]) => (
+                          <div className="forensic-record-field" key={label}>
+                            <dt>{label}</dt>
+                            <dd>{value}</dd>
+                          </div>
+                        ))}
+                    </dl>
+                    {selectedForensicFile && (
+                      <div className="timeline-associated-file">
+                        <span className="eyebrow">ASSOCIATED SOURCE FILE</span>
+                        <strong>{selectedForensicFile.filename}</strong>
+                        <code>{selectedForensicFile.source_id}</code>
+                      </div>
+                    )}
+                    <button
+                      className="primary-button timeline-inspect-button"
+                      type="button"
+                      onClick={() => {
+                        setSelectedEvidenceSourceId(
+                          selectedTimelineRecord.source_id || ""
+                        );
+                        setActivePage("Evidence Explorer");
+                      }}
+                    >
+                      Inspect associated evidence
+                    </button>
+                  </>
+                ) : (
+                  <div className="forensic-empty-state inspector-empty-state">
+                    <h4>Select a timeline event</h4>
+                    <p>
+                      Choose an event on the chronology to inspect its source
+                      metadata and associated evidence record.
+                    </p>
+                  </div>
+                )}
+              </aside>
+            </div>
+          </section>
+        ) : effectivePage === "Evidence Graph" ? (
+          <section className="graph-page">
+            <p className="graph-description">
+              Explore relationships returned by the investigation correlation
+              engine. Each node and connection represents a persisted evidence
+              record or backend relationship.
+            </p>
+            {workspaceError && (
+              <p className="forensic-message forensic-error" role="alert">
+                {workspaceError}
+              </p>
+            )}
+
+            <div className="graph-controls">
+              <label>
+                Search nodes
+                <input
+                  type="search"
+                  value={graphSearch}
+                  onChange={(event) => setGraphSearch(event.target.value)}
+                  placeholder="Evidence ID, event, user..."
+                />
+              </label>
+              <label>
+                Source type
+                <select
+                  value={graphSourceFilter}
+                  onChange={(event) =>
+                    setGraphSourceFilter(event.target.value)
+                  }
+                >
+                  <option value="all">All source types</option>
+                  {Object.entries(evidenceSourceLabels).map(
+                    ([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    )
+                  )}
+                </select>
+              </label>
+              <p className="graph-counts">
+                {filteredGraphNodes.length} nodes · {filteredGraphEdges.length}{" "}
+                relationships shown
               </p>
             </div>
 
             <div className="graph-layout">
-              <div className="graph-canvas">
-                {graphData.nodes.length > 0 ? (
-                  <>
+              <section className="graph-canvas" aria-label="Evidence graph">
+                {workspaceLoading ? (
+                  <p className="graph-empty-state" role="status">
+                    Loading evidence graph...
+                  </p>
+                ) : graphData.nodes.length === 0 ? (
+                  <div className="graph-empty-state">
+                    <h3>No graph data available</h3>
+                    <p>
+                      Add evidence to this investigation to load its actual
+                      nodes and correlation relationships.
+                    </p>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => setActivePage("Evidence Explorer")}
+                    >
+                      Open Evidence Explorer
+                    </button>
+                  </div>
+                ) : filteredGraphNodes.length === 0 ? (
+                  <div className="graph-empty-state">
+                    <h3>No matching nodes</h3>
+                    <p>Adjust the search or source filter.</p>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => {
+                        setGraphSearch("");
+                        setGraphSourceFilter("all");
+                      }}
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    className="graph-visualization"
+                    style={{ height: `${graphCanvasHeight}px` }}
+                  >
                     <svg
                       className="graph-connections"
-                      viewBox="0 0 700 420"
+                      viewBox={`0 0 1000 ${graphCanvasHeight}`}
                       preserveAspectRatio="none"
+                      role="img"
+                      aria-label={`${filteredGraphEdges.length} actual evidence relationships`}
                     >
-                      {/* Background: all relationships */}
-                      {graphData.edges.map((edge, index) => {
-                        const sourceIndex = graphData.nodes.findIndex(
-                          (node) => node.id === edge.source
-                        );
-                        const targetIndex = graphData.nodes.findIndex(
-                          (node) => node.id === edge.target
-                        );
-
-                        if (sourceIndex === -1 || targetIndex === -1) return null;
-
-                        const count = graphData.nodes.length;
-
-                        const sourceAngle =
-                          -Math.PI / 2 + (sourceIndex * 2 * Math.PI) / count;
-                        const targetAngle =
-                          -Math.PI / 2 + (targetIndex * 2 * Math.PI) / count;
-
-                        const sx = 350 + 224 * Math.cos(sourceAngle);
-                        const sy = 210 + 147 * Math.sin(sourceAngle);
-                        const tx = 350 + 224 * Math.cos(targetAngle);
-                        const ty = 210 + 147 * Math.sin(targetAngle);
-
-                        const dx = tx - sx;
-                        const dy = ty - sy;
-                        const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-
-                        const ux = dx / distance;
-                        const uy = dy / distance;
-
-                        const offset = (x, y) =>
-                          Math.min(
-                            51 / Math.max(Math.abs(x), 0.001),
-                            50 / Math.max(Math.abs(y), 0.001)
-                          );
-
-                        const start = offset(ux, uy);
-                        const end = offset(ux, uy);
-
+                      {filteredGraphEdges.map((edge, index) => {
+                        const source = graphNodePositions.get(edge.source);
+                        const target = graphNodePositions.get(edge.target);
+                        if (!source || !target) {
+                          return null;
+                        }
+                        const isSelected =
+                          selectedEvidence?.id === edge.source ||
+                          selectedEvidence?.id === edge.target;
                         return (
                           <line
-                            key={`background-${index}`}
-                            x1={sx + ux * start}
-                            y1={sy + uy * start}
-                            x2={tx - ux * end}
-                            y2={ty - uy * end}
-                            stroke="#b8c7d9"
-                            strokeWidth="1.2"
-                            strokeDasharray="5 7"
-                            strokeLinecap="round"
-                            opacity={selectedEvidence ? 0.10 : 0.22}
-                          />
+                            key={`${edge.source}-${edge.target}-${index}`}
+                            x1={source.x}
+                            y1={source.y}
+                            x2={target.x}
+                            y2={target.y}
+                            stroke={isSelected ? "#ff8738" : "#42a5ff"}
+                            strokeWidth={isSelected ? "2.5" : "1.5"}
+                          >
+                            <title>
+                              {edge.relationship_type ||
+                                "Relationship type unavailable"}
+                              {edge.description
+                                ? `: ${edge.description}`
+                                : ""}
+                              {edge.relationship_score != null
+                                ? ` (score ${edge.relationship_score})`
+                                : ""}
+                            </title>
+                          </line>
                         );
                       })}
+                    </svg>
+                    {Array.from(graphNodePositions.values()).map(
+                      ({ node, x, y }) => {
+                        const record = graphRecordById.get(node.id);
+                        const sourceType = record?.source_type;
+                        return (
+                          <button
+                            className={`graph-node ${
+                              evidenceSourceLabels[sourceType]
+                                ? sourceType
+                                : "unknown"
+                            } ${
+                              selectedEvidence?.id === node.id
+                                ? "is-selected"
+                                : ""
+                            }`}
+                            key={node.id}
+                            type="button"
+                            style={{
+                              left: `${(x / 1000) * 100}%`,
+                              top: `${(y / graphCanvasHeight) * 100}%`,
+                            }}
+                            onClick={() => setSelectedEvidence(node)}
+                            aria-pressed={selectedEvidence?.id === node.id}
+                            title={`${node.event_type || "Evidence event"} · ${
+                              node.id
+                            }`}
+                          >
+                            <span>
+                              {getEvidenceSourceLabel(sourceType)}
+                            </span>
+                            <strong>
+                              {node.event_type || "Event type unavailable"}
+                            </strong>
+                            <small>{node.id}</small>
+                          </button>
+                        );
+                      }
+                    )}
+                  </div>
+                )}
+              </section>
 
-                      {/* Foreground: selected evidence relationships */}
-                      {selectedEvidence &&
-                        graphData.edges.map((edge, index) => {
-                          const isConnected =
-                            edge.source === selectedEvidence.id ||
-                            edge.target === selectedEvidence.id;
-
-                          if (!isConnected) return null;
-
-                          const sourceIndex = graphData.nodes.findIndex(
-                            (node) => node.id === edge.source
+              <aside className="graph-details" aria-label="Graph node details">
+                {selectedGraphNode ? (
+                  <>
+                    <div className="graph-details-heading">
+                      <h3>
+                        {selectedGraphNode.event_type ||
+                          "Evidence record"}
+                      </h3>
+                      <button
+                        className="text-action"
+                        type="button"
+                        onClick={() => setSelectedEvidence(null)}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    {!selectedGraphNodeIsVisible && (
+                      <p className="graph-filter-note">
+                        This node is hidden by the current graph filters.
+                      </p>
+                    )}
+                    <dl className="graph-metadata">
+                      {[
+                        ["Evidence ID", selectedGraphNode.id],
+                        ["Node type", selectedGraphNode.node_type],
+                        ["Event time", selectedGraphNode.timestamp],
+                        ["User", selectedGraphNode.user_id],
+                        [
+                          "Source type",
+                          selectedGraphRecord
+                            ? getEvidenceSourceLabel(
+                                selectedGraphRecord.source_type
+                              )
+                            : null,
+                        ],
+                      ]
+                        .filter(
+                          ([, value]) =>
+                            value !== undefined &&
+                            value !== null &&
+                            value !== ""
+                        )
+                        .map(([label, value]) => (
+                          <div key={label}>
+                            <dt>{label}</dt>
+                            <dd>{value}</dd>
+                          </div>
+                        ))}
+                    </dl>
+                    <h4>Relationships</h4>
+                    {selectedGraphEdges.length ? (
+                      <ul className="graph-relationship-list">
+                        {selectedGraphEdges.map((edge, index) => {
+                          const relatedId =
+                            edge.source === selectedGraphNode.id
+                              ? edge.target
+                              : edge.source;
+                          const relatedNode = graphData.nodes.find(
+                            (node) => node.id === relatedId
                           );
-                          const targetIndex = graphData.nodes.findIndex(
-                            (node) => node.id === edge.target
-                          );
-
-                          if (sourceIndex === -1 || targetIndex === -1) return null;
-
-                          const count = graphData.nodes.length;
-
-                          const sourceAngle =
-                            -Math.PI / 2 + (sourceIndex * 2 * Math.PI) / count;
-                          const targetAngle =
-                            -Math.PI / 2 + (targetIndex * 2 * Math.PI) / count;
-
-                          const sx = 350 + 224 * Math.cos(sourceAngle);
-                          const sy = 210 + 147 * Math.sin(sourceAngle);
-                          const tx = 350 + 224 * Math.cos(targetAngle);
-                          const ty = 210 + 147 * Math.sin(targetAngle);
-
-                          const dx = tx - sx;
-                          const dy = ty - sy;
-                          const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-
-                          const ux = dx / distance;
-                          const uy = dy / distance;
-
-                          const offset = (x, y) =>
-                            Math.min(
-                              51 / Math.max(Math.abs(x), 0.001),
-                              50 / Math.max(Math.abs(y), 0.001)
-                            );
-
-                          const startOffset = offset(ux, uy);
-                          const endOffset = offset(ux, uy);
-
-                          const startX = sx + ux * startOffset;
-                          const startY = sy + uy * startOffset;
-                          const endX = tx - ux * endOffset;
-                          const endY = ty - uy * endOffset;
-
-                          const relationshipType = (
-                            edge.relationship_type || ""
-                          ).toUpperCase();
-
-                          const edgeColor = relationshipType.includes("TEMPORAL")
-                            ? "#9254de"
-                            : relationshipType.includes("SEQUENCE")
-                              ? "#fa8c16"
-                              : relationshipType.includes("ENTITY")
-                                ? "#13a89e"
-                                : "#3984e8";
-
-                          const connectedEdges = graphData.edges.filter(
-                            (item) =>
-                              item.source === selectedEvidence.id ||
-                              item.target === selectedEvidence.id
-                          );
-
-                          const connectedIndex = connectedEdges.indexOf(edge);
-
-                          // Separate curves to avoid overlapping connections
-                          const curveOffset =
-                            (connectedIndex % 2 === 0 ? 1 : -1) *
-                            (22 + Math.floor(connectedIndex / 2) * 13);
-
-                          const midX = (startX + endX) / 2;
-                          const midY = (startY + endY) / 2;
-
-                          const controlX =
-                            midX - (dy / distance) * curveOffset;
-                          const controlY =
-                            midY + (dx / distance) * curveOffset;
-
                           return (
-                            <g key={`highlight-${index}`}>
-                              <path
-                                d={`M ${startX} ${startY} Q ${controlX} ${controlY} ${endX} ${endY}`}
-                                fill="none"
-                                stroke={edgeColor}
-                                strokeWidth="3"
-                                strokeLinecap="round"
-                                opacity="0.95"
-                                className="graph-edge"
-                              />
-
-                              <title>
-                                {relationshipType || "OTHER"}
-                                {" | Score: "}
-                                {edge.relationship_score ?? "N/A"}
-                              </title>
-                            </g>
+                            <li key={`${relatedId}-${index}`}>
+                              <strong>
+                                {edge.relationship_type ||
+                                  "Relationship type unavailable"}
+                              </strong>
+                              <span>{relatedId}</span>
+                              {relatedNode?.event_type && (
+                                <span>{relatedNode.event_type}</span>
+                              )}
+                              {edge.description && <p>{edge.description}</p>}
+                              {edge.relationship_score != null && (
+                                <small>
+                                  Score: {edge.relationship_score}
+                                </small>
+                              )}
+                            </li>
                           );
                         })}
-                    </svg>
-                    <div className="graph-node node-center">
-                      <span>CASE</span>
-                      <strong>Investigation</strong>
-                    </div>
-
-                    {graphData.nodes.map((node, index) => {
-                      const angle =
-                        -Math.PI / 2 +
-                        (index * 2 * Math.PI) / graphData.nodes.length;
-
-                      const left = 50 + 32 * Math.cos(angle);
-                      const top = 50 + 35 * Math.sin(angle);
-
-                      return (
-                        <div
-                          key={node.id}
-                          className={`graph-node ${
-                            selectedEvidence?.id === node.id
-                              ? "graph-node-selected"
-                              : selectedEvidence &&
-                                  graphData.edges.some(
-                                    (edge) =>
-                                      (edge.source === selectedEvidence.id &&
-                                        edge.target === node.id) ||
-                                      (edge.target === selectedEvidence.id &&
-                                        edge.source === node.id)
-                                  )
-                                ? "graph-node-connected"
-                                : selectedEvidence
-                                  ? "graph-node-dimmed"
-                                  : ""
-                          }`}
-                          style={{
-                            left: `${left}%`,
-                            top: `${top}%`,
-                            transform: "translate(-50%, -50%)",
-                            cursor: "pointer",
-                          }}
-                          onClick={() =>
-                            setSelectedEvidence({
-                              id: node.id,
-                              name: node.event_type || "Evidence Event",
-                              type: node.node_type || "Evidence",
-                              status: "Processed",
-                              description: [
-                                node.timestamp &&
-                                  `Timestamp: ${node.timestamp}`,
-                                node.user_id &&
-                                  `User: ${node.user_id}`,
-                              ]
-                                .filter(Boolean)
-                                .join(" | ") ||
-                                "Evidence node from the current investigation.",
-                            })
-                          }
-                        >
-                          <span>
-                            {node.node_type || "EVIDENCE"}
-                          </span>
-
-                          <strong title={node.id}>
-                            #{node.id?.slice(-4) || "N/A"}
-                          </strong>
-
-                          <small>
-                            {node.event_type || "Evidence Record"}
-                          </small>
-                        </div>
-                      );
-                    })}
+                      </ul>
+                    ) : (
+                      <p className="graph-muted-copy">
+                        No relationships are attached to this node in the
+                        backend graph.
+                      </p>
+                    )}
+                    {selectedGraphRecord && (
+                      <button
+                        className="primary-button graph-inspect-button"
+                        type="button"
+                        onClick={() => {
+                          setSelectedEvidenceSourceId(
+                            selectedGraphRecord.source_id || ""
+                          );
+                          setSelectedForensicRecordId(
+                            selectedGraphRecord.evidence_id
+                          );
+                          setActivePage("Evidence Explorer");
+                        }}
+                      >
+                        Inspect source evidence
+                      </button>
+                    )}
                   </>
                 ) : (
-                  <div className="information-card">
-                    <h3>No Graph Data Available</h3>
-
+                  <div className="graph-empty-detail">
+                    <h3>Select a node</h3>
                     <p>
-                      Add evidence from Evidence Explorer to view its nodes and
-                      relationships.
+                      Select a graph node to inspect its evidence metadata and
+                      backend-returned relationships.
                     </p>
                   </div>
                 )}
@@ -1513,57 +2277,91 @@ function App() {
             </div>
           </section>
         ) : effectivePage === "What-If Simulator" ? (
-          <section className="welcome-card">
-            <div style={{ width: "100%" }}>
-              <span className="eyebrow">
-                FORENSIC SCENARIO ANALYSIS
-              </span>
+          <section className="simulator-page">
+            <p className="simulator-description">
+              Test how excluding one evidence record changes the analysis.
+              Original evidence and the baseline remain unchanged.
+            </p>
 
-              <h2>What-If Investigation Simulator</h2>
-
-              <p>
-                Explore how excluding evidence changes the investigation
-                results. Original evidence remains unchanged.
+            {workspaceError && (
+              <p className="forensic-message forensic-error" role="alert">
+                {workspaceError}
               </p>
+            )}
+            {simulationError && (
+              <p className="forensic-message forensic-error" role="alert">
+                {simulationError}
+              </p>
+            )}
 
-              {!investigationId ? (
-                <p>
-                  Select an investigation and add evidence in Evidence Explorer
-                  before starting a simulation.
-                </p>
-              ) : (
-                <>
+            <section className="simulator-configuration">
+              <div className="simple-section-heading">
+                <h2>Scenario setup</h2>
+                <p>Choose an evidence record to exclude from a new scenario.</p>
+              </div>
+              {!analysisResult?.baseline_analysis_id ||
+              evidenceRecords.length === 0 ? (
+                <div className="simple-empty-state">
                   <p>
-                    <strong>Investigation:</strong> {investigationId}
+                    A baseline analysis and at least one evidence record are
+                    required before a simulation can run.
                   </p>
-
-                  <label
-                    htmlFor="scenarioName"
-                    style={{ display: "block", marginTop: "20px" }}
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => setActivePage("Evidence Explorer")}
                   >
-                    Scenario Name
+                    Open Evidence Explorer
+                  </button>
+                </div>
+              ) : (
+                <div className="simulator-form">
+                  <label>
+                    Scenario name
+                    <input
+                      type="text"
+                      value={scenarioName}
+                      required
+                      maxLength={200}
+                      onChange={(event) => {
+                        setScenarioName(event.target.value);
+                        setSimulationError("");
+                        setSimulationResult(null);
+                        setSimulationComparison(null);
+                        setScenarioId(null);
+                        setAuditHistory([]);
+                      }}
+                    />
                   </label>
-
-                  <input
-                    id="scenarioName"
-                    type="text"
-                    value={scenarioName}
-                    onChange={(event) =>
-                      setScenarioName(event.target.value)
-                    }
-                    style={{
-                      padding: "10px",
-                      width: "100%",
-                      maxWidth: "450px",
-                      marginTop: "8px",
-                    }}
-                  />
-
-                  <label
-                    htmlFor="evidenceSelect"
-                    style={{ display: "block", marginTop: "20px" }}
-                  >
-                    Select Evidence to Exclude
+                  <label>
+                    Evidence record to exclude
+                    <select
+                      value={selectedEvidenceId}
+                      onChange={(event) => {
+                        setSelectedEvidenceId(event.target.value);
+                        setSimulationError("");
+                        setSimulationResult(null);
+                        setSimulationComparison(null);
+                        setScenarioId(null);
+                        setAuditHistory([]);
+                      }}
+                      required
+                    >
+                      <option value="">Select a record</option>
+                      {evidenceRecords.map((record) => (
+                        <option
+                          key={record.evidence_id}
+                          value={record.evidence_id}
+                        >
+                          {record.evidence_id} ·{" "}
+                          {record.event_type || record.original_event_type} ·{" "}
+                          {getEvidenceSourceLabel(record.source_type)}
+                          {getFileForRecord(record)?.filename
+                            ? ` · ${getFileForRecord(record).filename}`
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
                   </label>
 
                   <select
@@ -1595,147 +2393,182 @@ function App() {
                   <div style={{ marginTop: "24px" }}>
                     <button
                       className="primary-button"
+                      type="button"
                       onClick={handleRunSimulation}
-                      disabled={simulationLoading}
+                      disabled={
+                        simulationLoading ||
+                        !selectedEvidenceId ||
+                        !scenarioName.trim()
+                      }
                     >
                       {simulationLoading
-                        ? "Running Simulation..."
-                        : "Run Simulation"}
+                        ? "Running simulation..."
+                        : "Run simulation"}
                     </button>
                   </div>
-                </>
+                </div>
               )}
-
-              {simulationError && (
-                <p style={{ color: "red", marginTop: "20px" }}>
-                  {simulationError}
+              {simulationLoading && (
+                <p className="simulator-loading" role="status">
+                  Running scenario and comparing it with the baseline...
                 </p>
               )}
+            </section>
 
-              {scenarioId && (
-                <p style={{ marginTop: "20px" }}>
-                  <strong>Scenario ID:</strong> {scenarioId}
-                </p>
-              )}
-
-              {simulationResult && (
-                <div style={{ marginTop: "30px", width: "100%" }}>
-                  <h3>Simulation Results Dashboard</h3>
-
-                  <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-                    gap: "15px",
-                    marginTop: "20px"
-                  }}>
-                    {[
-                      ["Status", simulationResult.status || "COMPLETED"],
-                      ["Findings", simulationResult.findings?.length ?? 0],
-                      ["Relationships", simulationResult.relationships?.length ?? 0],
-                      ["Graph Nodes", simulationResult.graph?.nodes?.length ?? 0],
-                      ["Graph Edges", simulationResult.graph?.edges?.length ?? 0],
-                    ].map(([label, value]) => (
-                      <div key={label} style={{
-                        background: "#f1f5fb",
-                        padding: "20px",
-                        borderRadius: "12px",
-                        textAlign: "center"
-                      }}>
-                        <h3 style={{ color: "#287bd1" }}>{value}</h3>
-                        <p>{label}</p>
-                      </div>
-                    ))}
+            <section className="simulator-results">
+              <div className="simple-section-heading">
+                <h2>Simulation results</h2>
+                <p>Results are shown after the backend completes a run.</p>
+              </div>
+              {simulationResult ? (
+                <>
+                  <div className="simulation-result-heading">
+                    <div>
+                      <strong>{scenarioName || "Scenario result"}</strong>
+                      <span>Scenario ID: {scenarioId || "Not returned"}</span>
+                    </div>
+                    <span className="simulation-status">
+                      {simulationResult.status || "Status not returned"}
+                    </span>
                   </div>
 
-                  <h3 style={{ marginTop: "30px" }}>Detected Findings</h3>
+                  <div className="simulation-result-columns">
+                    <section className="simulation-result-section">
+                      <h3>Findings</h3>
+                      {simulationResult.findings?.length ? (
+                        <ul className="simulation-finding-list">
+                          {simulationResult.findings.map((finding) => (
+                            <li key={finding.finding_id}>
+                              <div>
+                                <strong>{finding.title}</strong>
+                                {finding.severity && (
+                                  <span
+                                    className={`simulation-severity ${String(
+                                      finding.severity
+                                    ).toLowerCase()}`}
+                                  >
+                                    {finding.severity}
+                                  </span>
+                                )}
+                              </div>
+                              <p>{finding.description}</p>
+                              <small>
+                                {finding.finding_id}
+                                {finding.evidence_ids?.length
+                                  ? ` · Evidence: ${finding.evidence_ids.join(
+                                      ", "
+                                    )}`
+                                  : ""}
+                              </small>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="simulator-result-empty">
+                          No findings were returned for this scenario.
+                        </p>
+                      )}
+                    </section>
 
-                  {simulationResult.findings?.map((finding) => (
-                    <div key={finding.finding_id} style={{
-                      background: "#f8f9fc",
-                      padding: "15px",
-                      marginTop: "10px",
-                      borderRadius: "10px",
-                      borderLeft: "4px solid #287bd1"
-                    }}>
-                      <strong>{finding.title}</strong>
-                      <p>{finding.description}</p>
-                      <small>
-                        ID: {finding.finding_id} | Severity: {finding.severity}
-                      </small>
-                    </div>
-                  ))}
-                </div>
+                    <section className="simulation-result-section">
+                      <h3>Relationships</h3>
+                      {simulationResult.relationships?.length ? (
+                        <ul className="simulation-relationship-list">
+                          {simulationResult.relationships.map(
+                            (relationship, index) => (
+                              <li
+                                key={`${relationship.source_evidence_id || ""}-${
+                                  relationship.target_evidence_id || ""
+                                }-${index}`}
+                              >
+                                <strong>
+                                  {relationship.relationship_type ||
+                                    "Type unavailable"}
+                                </strong>
+                                <span>
+                                  {relationship.source_evidence_id || "Source unavailable"}
+                                  {" → "}
+                                  {relationship.target_evidence_id || "Target unavailable"}
+                                </span>
+                                {relationship.description && (
+                                  <p>{relationship.description}</p>
+                                )}
+                                {relationship.relationship_score != null && (
+                                  <small>
+                                    Score: {relationship.relationship_score}
+                                  </small>
+                                )}
+                              </li>
+                            )
+                          )}
+                        </ul>
+                      ) : (
+                        <p className="simulator-result-empty">
+                          No relationships were returned for this scenario.
+                        </p>
+                      )}
+                    </section>
+                  </div>
+                </>
+              ) : (
+                <p className="simulator-result-empty">
+                  Configure a scenario and run it to see findings and
+                  relationships here.
+                </p>
               )}
 
               {simulationComparison && (
-                <div style={{ marginTop: "30px", width: "100%" }}>
-                  <h3>Baseline vs Simulated Comparison</h3>
-
-                  <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-                    gap: "15px",
-                    marginTop: "20px"
-                  }}>
+                <section className="simulation-comparison">
+                  <h3>Compared with baseline</h3>
+                  <dl>
                     {[
                       [
-                        "Unchanged Relationships",
-                        simulationComparison.comparison?.unchanged_relationships?.length ?? 0
+                        "Unchanged relationships",
+                        simulationComparison.comparison
+                          ?.unchanged_relationships,
                       ],
                       [
-                        "Removed Relationships",
-                        simulationComparison.comparison?.removed_relationships?.length ?? 0
+                        "Removed relationships",
+                        simulationComparison.comparison
+                          ?.removed_relationships,
                       ],
                       [
-                        "Added Relationships",
-                        simulationComparison.comparison?.added_relationships?.length ?? 0
+                        "Added relationships",
+                        simulationComparison.comparison?.added_relationships,
                       ],
                       [
-                        "Unchanged Findings",
-                        simulationComparison.finding_details?.unchanged?.length ?? 0
+                        "Unchanged findings",
+                        simulationComparison.finding_details?.unchanged,
                       ],
                       [
-                        "Removed Findings",
-                        simulationComparison.finding_details?.removed?.length ?? 0
+                        "Removed findings",
+                        simulationComparison.finding_details?.removed,
                       ],
                       [
-                        "Added Findings",
-                        simulationComparison.finding_details?.added?.length ?? 0
+                        "Added findings",
+                        simulationComparison.finding_details?.added,
                       ],
                       [
-                        "Removed Graph Nodes",
-                        simulationComparison.graph_details?.removed_nodes?.length ?? 0
-                      ]
-                    ].map(([label, value]) => (
-                      <div key={label} style={{
-                        background: "#f1f5fb",
-                        padding: "18px",
-                        borderRadius: "12px",
-                        textAlign: "center"
-                      }}>
-                        <h2 style={{ color: "#287bd1" }}>{value}</h2>
-                        <p>{label}</p>
+                        "Removed graph nodes",
+                        simulationComparison.graph_details?.removed_nodes,
+                      ],
+                    ].map(([label, entries]) => (
+                      <div key={label}>
+                        <dt>{label}</dt>
+                        <dd>
+                          {Array.isArray(entries)
+                            ? entries.length
+                            : "Not returned"}
+                        </dd>
                       </div>
                     ))}
-                  </div>
-
-                  <p style={{
-                    marginTop: "20px",
-                    color: "#64748b",
-                    fontSize: "13px"
-                  }}>
-                    Note: These results represent a hypothetical scenario.
-                    Original evidence and baseline analysis remain unchanged.
+                  </dl>
+                  <p>
+                    This is a hypothetical analysis. Original evidence and
+                    baseline analysis are unchanged.
                   </p>
-                </div>
+                </section>
               )}
-              {auditHistory.length > 0 && (
-                <div style={{ marginTop: "35px", width: "100%" }}>
-                  <h3>Simulation Audit History</h3>
-
-                  <p style={{ color: "#64748b" }}>
-                    Recorded actions performed during this simulation.
-                  </p>
 
                   {auditHistory.map((entry, index) => {
                     const action = String(
@@ -1923,7 +2756,7 @@ function App() {
                   })}
                 </div>
               )}
-            </div>
+            </section>
           </section>
                ) : effectivePage === "Reports" ? (
           <section className="report-page">

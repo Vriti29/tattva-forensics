@@ -1,5 +1,25 @@
 :root {
-  font-family: 'Inter', 'Segoe UI', Roboto, sans-serif;
+  --color-navy-950: #07111f;
+  --color-navy-900: #0b1728;
+  --color-navy-800: #11233a;
+  --color-surface: #111d2d;
+  --color-border: rgba(151, 174, 202, 0.16);
+  --color-text: #eaf0f7;
+  --color-muted: #9aaabd;
+  --color-orange: #ff8738;
+  --color-blue: #42a5ff;
+  --font-sans: Inter, 'Segoe UI', Roboto, sans-serif;
+  --heading: var(--font-sans);
+  --mono: ui-monospace, Consolas, monospace;
+  --text-h: #08060d;
+  --code-bg: #f4f3ec;
+  --radius-card: 18px;
+  --shadow-elevated: 0 24px 70px rgba(0, 0, 0, 0.28);
+
+  font-family: var(--font-sans);
+  color-scheme: light;
+  color: var(--color-text);
+  background: var(--color-navy-950);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -44,7 +64,6 @@ select {
 }
 /* =====================================
    EVIDENCE GRAPH - VISUAL REDESIGN
-===================================== */
 
 .graph-page {
   padding-bottom: 40px;
