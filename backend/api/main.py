@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from backend.api.simulation_setup import install_simulation_api
 from backend.api.auth_routes import router as auth_router
+from backend.auth.passwords import hash_password
 from backend.auth.security import (
     configure_http_security,
     get_current_user,
@@ -30,6 +31,7 @@ from backend.pipeline import analyze_evidence_records, process_evidence_file
 from backend.simulation.forensic_adapter import (
     analyze_evidence as run_forensic_analysis
 )
+
 
 
 ALLOWED_SOURCES = {"authentication", "file", "network", "archive"}
@@ -169,6 +171,23 @@ def create_app(data_directory=None):
         str(Path(__file__).resolve().parents[1] / "data")
     )
     store = InvestigationStore(configured_directory)
+
+    bootstrap_username = os.environ.get(
+        "TATTVA_BOOTSTRAP_ADMIN_USERNAME", ""
+    ).strip()
+    bootstrap_password = os.environ.get(
+        "TATTVA_BOOTSTRAP_ADMIN_PASSWORD", ""
+    )
+
+    if bool(bootstrap_username) != bool(bootstrap_password):
+        raise RuntimeError("Both bootstrap admin variables must be set")
+
+    if bootstrap_username and not store.has_admin():
+        store.provision_initial_admin(
+            bootstrap_username,
+            hash_password(bootstrap_password),
+        )
+        print("Initial administrator account provisioned.")
 
     application = FastAPI(
         title="Tattva Forensics API",
