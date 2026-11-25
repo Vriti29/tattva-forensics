@@ -1,0 +1,24 @@
+{
+  "rewrites": [
+    {
+      "source": "/auth/:path*",
+      "destination": "https://tattva-forensics-backend.onrender.com/auth/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://tattva-forensics-backend.onrender.com/api/:path*"
+    },
+    {
+      "source": "/analyze/:path*",
+      "destination": "https://tattva-forensics-backend.onrender.com/analyze/:path*"
+    },
+    {
+      "source": "/users/:path*",
+      "destination": "https://tattva-forensics-backend.onrender.com/users/:path*"
+    },
+    {
+      "source": "/investigations/:path*",
+      "destination": "https://tattva-forensics-backend.onrender.com/investigations/:path*"
+    }
+  ]
+}
