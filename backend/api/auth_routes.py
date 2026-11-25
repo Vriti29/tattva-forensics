@@ -26,6 +26,12 @@ Role = Literal[
     "INVESTIGATOR",
     "VIEWER",
 ]
+SignInMode = Literal["investigator", "administrator"]
+INVESTIGATOR_SIGN_IN_ROLES = {
+    "LEAD_INVESTIGATOR",
+    "INVESTIGATOR",
+    "VIEWER",
+}
 _DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(9))
 
 router = APIRouter(tags=["Authentication and access management"])
@@ -34,6 +40,7 @@ router = APIRouter(tags=["Authentication and access management"])
 class LoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=320)
     password: str = Field(min_length=1, max_length=1024)
+    sign_in_as: SignInMode | None = None
 
 
 class CreateUserRequest(BaseModel):
@@ -129,6 +136,27 @@ def login(data: LoginRequest, request: Request, response: Response):
             status_code=401,
             detail="Invalid username or password",
         )
+
+    if data.sign_in_as is not None:
+        user_role = auth_record["user"]["role"]
+        allowed_roles = (
+            {"ADMIN"}
+            if data.sign_in_as == "administrator"
+            else INVESTIGATOR_SIGN_IN_ROLES
+        )
+        if user_role not in allowed_roles:
+            sign_in_area = (
+                "Administrator"
+                if data.sign_in_as == "administrator"
+                else "Investigator"
+            )
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"This account is not authorized for "
+                    f"{sign_in_area} sign-in."
+                ),
+            )
 
     now = _now()
     expires_at = now + timedelta(

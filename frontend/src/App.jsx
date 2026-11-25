@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminDashboard } from "./AdminDashboard.jsx";
+import tattvaMark from "./assets/tattva-mark.svg";
+import fingerprintBackground from "./assets/fingerprint-background.png";
 import {
   AdministratorDashboard,
   InvestigatorDashboard,
@@ -48,6 +50,12 @@ const evidenceSourceLabels = {
   archive: "Archive",
 };
 
+const fingerprintBackgroundPages = new Set([
+  "Dashboard",
+  "Evidence Explorer",
+  "Incident Timeline",
+]);
+
 function getTimestampMillis(timestamp) {
   if (typeof timestamp !== "string" || !timestamp.trim()) {
     return Number.NaN;
@@ -55,6 +63,133 @@ function getTimestampMillis(timestamp) {
   const value = timestamp.trim();
   const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
   return Date.parse(hasTimezone ? value : `${value}Z`);
+}
+
+function getGraphNodeLabel(node) {
+  const value =
+    node.label ||
+    node.name ||
+    node.entity_name ||
+    node.event_type ||
+    node.node_type;
+  if (!value) {
+    return "Evidence event";
+  }
+  return String(value)
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+}
+
+function getGraphNodePositions(nodes, edges, height) {
+  const count = nodes.length;
+  if (!count) {
+    return new Map();
+  }
+
+  const columns = Math.min(4, count);
+  const rows = Math.ceil(count / columns);
+  const degrees = new Map(nodes.map((node) => [node.id, 0]));
+  edges.forEach((edge) => {
+    degrees.set(edge.source, (degrees.get(edge.source) || 0) + 1);
+    degrees.set(edge.target, (degrees.get(edge.target) || 0) + 1);
+  });
+  const positionedNodes = nodes.map((node, index) => {
+    const row = Math.floor(index / columns);
+    const column = index % columns;
+    const nodesInRow = Math.min(columns, count - row * columns);
+    const degree = degrees.get(node.id) || 0;
+    const hash = String(node.id)
+      .split("")
+      .reduce((value, character) => (value * 31 + character.charCodeAt(0)) >>> 0, 7);
+    return {
+      node,
+      degree,
+      width: Math.min(186, 152 + degree * 5),
+      height: Math.min(94, 78 + degree * 2),
+      x: ((column + 0.5) * 1000) / nodesInRow + (hash % 23) - 11,
+      y:
+        rows === 1
+          ? height / 2
+          : 65 +
+            (row * (height - 130)) / (rows - 1) +
+            ((hash >>> 5) % 17) -
+            8,
+    };
+  });
+
+  if (count <= 180) {
+    const indexById = new Map(
+      positionedNodes.map((position, index) => [position.node.id, index])
+    );
+    const linkedPairs = edges
+      .map((edge) => [
+        indexById.get(edge.source),
+        indexById.get(edge.target),
+      ])
+      .filter(([source, target]) => source != null && target != null);
+    const iterations = 42;
+    const idealSpacing = Math.max(
+      172,
+      Math.min(224, Math.sqrt((1000 * height) / count) * 0.8)
+    );
+
+    for (let iteration = 0; iteration < iterations; iteration += 1) {
+      const forces = positionedNodes.map(() => ({ x: 0, y: 0 }));
+      for (let first = 0; first < count; first += 1) {
+        for (let second = first + 1; second < count; second += 1) {
+          const a = positionedNodes[first];
+          const b = positionedNodes[second];
+          const dx = a.x - b.x;
+          const dy = a.y - b.y;
+          const distance = Math.max(1, Math.hypot(dx, dy));
+          const minimumDistance = (a.width + b.width) / 2 + 30;
+          if (distance < minimumDistance) {
+            const force = (minimumDistance - distance) * 0.035;
+            forces[first].x += (dx / distance) * force;
+            forces[first].y += (dy / distance) * force;
+            forces[second].x -= (dx / distance) * force;
+            forces[second].y -= (dy / distance) * force;
+          }
+        }
+      }
+
+      linkedPairs.forEach(([sourceIndex, targetIndex]) => {
+        const source = positionedNodes[sourceIndex];
+        const target = positionedNodes[targetIndex];
+        const dx = target.x - source.x;
+        const dy = target.y - source.y;
+        const distance = Math.max(1, Math.hypot(dx, dy));
+        if (distance > idealSpacing) {
+          const force = (distance - idealSpacing) * 0.006;
+          forces[sourceIndex].x += (dx / distance) * force;
+          forces[sourceIndex].y += (dy / distance) * force;
+          forces[targetIndex].x -= (dx / distance) * force;
+          forces[targetIndex].y -= (dy / distance) * force;
+        }
+      });
+
+      const maxMovement = 12 * (1 - iteration / iterations) + 1;
+      positionedNodes.forEach((position, index) => {
+        const force = forces[index];
+        const magnitude = Math.max(1, Math.hypot(force.x, force.y));
+        const scale = Math.min(1, maxMovement / magnitude);
+        position.x = Math.min(
+          900,
+          Math.max(100, position.x + force.x * scale)
+        );
+        position.y = Math.min(
+          height - position.height / 2 - 12,
+          Math.max(position.height / 2 + 12, position.y + force.y * scale)
+        );
+      });
+    }
+  }
+
+  return new Map(
+    positionedNodes.map((position) => [position.node.id, position])
+  );
 }
 
 function getEvidenceSourceLabel(sourceType) {
@@ -231,12 +366,34 @@ function App() {
       );
   }, [resetWorkspaceData]);
 
-  const handleLogin = async (username, password) => {
+  const handleLogin = async (username, password, signInMode) => {
     const result = await requestJson("/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({
+        username,
+        password,
+        sign_in_as: signInMode,
+      }),
     });
+    const allowedRoles =
+      signInMode === "administrator"
+        ? ["ADMIN"]
+        : ["LEAD_INVESTIGATOR", "INVESTIGATOR", "VIEWER"];
+    if (!allowedRoles.includes(result?.user?.role)) {
+      setCsrfToken(result?.csrf_token);
+      try {
+        await requestJson("/auth/logout", { method: "POST" });
+      } finally {
+        setCsrfToken("");
+        setCurrentUser(null);
+      }
+      const optionName =
+        signInMode === "administrator" ? "Administrator" : "Investigator";
+      throw new Error(
+        `This account is not authorized for ${optionName} sign-in.`
+      );
+    }
     setCsrfToken(result.csrf_token);
     setCurrentUser(result.user);
     setAuthError("");
@@ -434,7 +591,7 @@ function App() {
       setWorkspaceNotice("");
       setWorkspaceError("");
       setActivePage(
-        currentUser?.role === "ADMIN" ? "Evidence Explorer" : "Dashboard"
+        currentUser?.role === "ADMIN" ? "Dashboard" : "Administration"
       );
       if (id === investigationId) {
         loadInvestigation(id).catch(() => {});
@@ -476,7 +633,7 @@ function App() {
     setTimelineSourceFilter("all");
     setTimelineRange("all");
     setActivePage(
-      currentUser?.role === "ADMIN" ? "Evidence Explorer" : "Dashboard"
+      currentUser?.role === "ADMIN" ? "Dashboard" : "Administration"
     );
     setInvestigation(null);
     setWorkspaceLoading(true);
@@ -747,61 +904,65 @@ function App() {
   const selectedTimelineIndex = filteredTimelineRecords.findIndex(
     (record) => record.evidence_id === selectedForensicRecordId
   );
-  const graphRecordById = new Map(
-    evidenceRecords.map((record) => [record.evidence_id, record])
+  const graphRecordById = useMemo(
+    () =>
+      new Map(
+        evidenceRecords.map((record) => [record.evidence_id, record])
+      ),
+    [evidenceRecords]
   );
   const graphSearchTerm = graphSearch.trim().toLowerCase();
-  const filteredGraphNodes = graphData.nodes.filter((node) => {
-    const record = graphRecordById.get(node.id);
-    const matchesSource =
-      graphSourceFilter === "all" ||
-      record?.source_type === graphSourceFilter;
-    const matchesSearch =
-      !graphSearchTerm ||
-      [
-        node.id,
-        node.node_type,
-        node.event_type,
-        node.timestamp,
-        node.user_id,
-        record?.source_type,
-        record?.source_id,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(graphSearchTerm);
-    return matchesSource && matchesSearch;
-  });
-  const visibleGraphNodeIds = new Set(
-    filteredGraphNodes.map((node) => node.id)
+  const filteredGraphNodes = useMemo(
+    () =>
+      graphData.nodes.filter((node) => {
+        const record = graphRecordById.get(node.id);
+        const matchesSource =
+          graphSourceFilter === "all" ||
+          record?.source_type === graphSourceFilter;
+        const matchesSearch =
+          !graphSearchTerm ||
+          [
+            node.id,
+            node.node_type,
+            node.event_type,
+            node.timestamp,
+            node.user_id,
+            record?.source_type,
+            record?.source_id,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase()
+            .includes(graphSearchTerm);
+        return matchesSource && matchesSearch;
+      }),
+    [graphData.nodes, graphRecordById, graphSearchTerm, graphSourceFilter]
   );
-  const filteredGraphEdges = graphData.edges.filter(
-    (edge) =>
-      visibleGraphNodeIds.has(edge.source) &&
-      visibleGraphNodeIds.has(edge.target)
+  const visibleGraphNodeIds = useMemo(
+    () => new Set(filteredGraphNodes.map((node) => node.id)),
+    [filteredGraphNodes]
+  );
+  const filteredGraphEdges = useMemo(
+    () =>
+      graphData.edges.filter(
+        (edge) =>
+          visibleGraphNodeIds.has(edge.source) &&
+          visibleGraphNodeIds.has(edge.target)
+      ),
+    [graphData.edges, visibleGraphNodeIds]
   );
   const graphColumns = 4;
   const graphRows = Math.ceil(filteredGraphNodes.length / graphColumns);
   const graphCanvasHeight =
-    graphRows > 1 ? graphRows * 140 + 80 : 590;
-  const graphNodePositions = new Map(
-    filteredGraphNodes.map((node, index) => {
-      const row = Math.floor(index / graphColumns);
-      const column = index % graphColumns;
-      const nodesInRow = Math.min(
-        graphColumns,
-        filteredGraphNodes.length - row * graphColumns
-      );
-      const position = {
-        x: ((column + 0.5) * 1000) / nodesInRow,
-        y:
-          graphRows === 1
-            ? graphCanvasHeight / 2
-            : 70 + row * 140,
-      };
-      return [node.id, { node, ...position }];
-    })
+    Math.max(590, graphRows * 180 + 80);
+  const graphNodePositions = useMemo(
+    () =>
+      getGraphNodePositions(
+        filteredGraphNodes,
+        filteredGraphEdges,
+        graphCanvasHeight
+      ),
+    [filteredGraphNodes, filteredGraphEdges, graphCanvasHeight]
   );
   const selectedGraphNode = graphData.nodes.find(
     (node) => node.id === selectedEvidence?.id
@@ -873,6 +1034,13 @@ function App() {
 
   return (
     <div
+      style={
+        fingerprintBackgroundPages.has(effectivePage)
+          ? {
+              "--fingerprint-background-image": `url("${fingerprintBackground}")`,
+            }
+          : undefined
+      }
       className={`app-container ${
         effectivePage === "Dashboard"
           ? "dashboard-shell"
@@ -880,20 +1048,28 @@ function App() {
             ? "investigations-shell"
             : effectivePage === "Administration"
               ? "admin-shell"
-            : [
+              : ["Evidence Explorer", "Incident Timeline"].includes(
+                  effectivePage
+                )
+                ? "forensic-workspace-shell reference-theme-shell"
+                : [
                   "Evidence Explorer",
-                  "Incident Timeline",
                   "Evidence Graph",
                   "What-If Simulator",
                   "Reports",
                 ].includes(effectivePage)
-              ? "forensic-workspace-shell"
-              : ""
+                  ? "forensic-workspace-shell"
+                  : ""
       }`}
     >
       <header className="app-navigation">
         <div className="brand">
-          <div className="brand-logo">TF</div>
+          <img
+            className="brand-logo brand-logo-image"
+            src={tattvaMark}
+            alt=""
+            aria-hidden="true"
+          />
 
           <div>
             <h2>Tattva Forensics</h2>
@@ -1552,9 +1728,6 @@ function App() {
                 </span>
               </div>
             </header>
-        ) : effectivePage === "Evidence Graph" ? (
-          /* EVIDENCE GRAPH - REAL BACKEND DATA */
-          <section className="graph-page">
 
             {workspaceError && (
               <p className="forensic-message forensic-error" role="alert">
@@ -2034,8 +2207,10 @@ function App() {
                             y1={source.y}
                             x2={target.x}
                             y2={target.y}
-                            stroke={isSelected ? "#ff8738" : "#42a5ff"}
-                            strokeWidth={isSelected ? "2.5" : "1.5"}
+                            stroke={isSelected ? "#f6d7b3" : "#a69ad4"}
+                            strokeWidth={isSelected ? "3" : "1.75"}
+                            strokeOpacity={isSelected ? "1" : "0.72"}
+                            vectorEffect="non-scaling-stroke"
                           >
                             <title>
                               {edge.relationship_type ||
@@ -2052,7 +2227,7 @@ function App() {
                       })}
                     </svg>
                     {Array.from(graphNodePositions.values()).map(
-                      ({ node, x, y }) => {
+                      ({ node, x, y, width, height }) => {
                         const record = graphRecordById.get(node.id);
                         const sourceType = record?.source_type;
                         return (
@@ -2071,20 +2246,18 @@ function App() {
                             style={{
                               left: `${(x / 1000) * 100}%`,
                               top: `${(y / graphCanvasHeight) * 100}%`,
+                              width: `${width}px`,
+                              minHeight: `${height}px`,
                             }}
                             onClick={() => setSelectedEvidence(node)}
                             aria-pressed={selectedEvidence?.id === node.id}
-                            title={`${node.event_type || "Evidence event"} · ${
-                              node.id
-                            }`}
+                            title={`${getGraphNodeLabel(node)} · ${node.id}`}
+                            aria-label={`${getGraphNodeLabel(node)}, evidence ID ${node.id}`}
                           >
                             <span>
                               {getEvidenceSourceLabel(sourceType)}
                             </span>
-                            <strong>
-                              {node.event_type || "Event type unavailable"}
-                            </strong>
-                            <small>{node.id}</small>
+                            <strong>{getGraphNodeLabel(node)}</strong>
                           </button>
                         );
                       }
@@ -2098,8 +2271,7 @@ function App() {
                   <>
                     <div className="graph-details-heading">
                       <h3>
-                        {selectedGraphNode.event_type ||
-                          "Evidence record"}
+                        {getGraphNodeLabel(selectedGraphNode)}
                       </h3>
                       <button
                         className="text-action"
@@ -2206,7 +2378,6 @@ function App() {
                     </p>
                   </div>
                 )}
-              </div>
 
               <div className="graph-legend">
                 {selectedEvidence && (
@@ -2273,7 +2444,8 @@ function App() {
                   <p>Total Nodes: {graphData.nodes.length}</p>
 
                   <p>Total Relationships: {graphData.edges.length}</p>
-              </div>
+                </div>
+              </aside>
             </div>
           </section>
         ) : effectivePage === "What-If Simulator" ? (
@@ -2363,32 +2535,6 @@ function App() {
                       ))}
                     </select>
                   </label>
-
-                  <select
-                    id="evidenceSelect"
-                    value={selectedEvidenceId}
-                    onChange={(event) =>
-                      setSelectedEvidenceId(event.target.value)
-                    }
-                    style={{
-                      padding: "10px",
-                      width: "100%",
-                      maxWidth: "450px",
-                      marginTop: "8px",
-                    }}
-                  >
-                    <option value="">Choose evidence</option>
-
-                    {evidenceRecords.map((record) => (
-                      <option
-                        key={record.evidence_id}
-                        value={record.evidence_id}
-                      >
-                        {formatEvidenceId(record.evidence_id)} — {record.event_type} (
-                        {record.source_type})
-                      </option>
-                    ))}
-                  </select>
 
                   <div style={{ marginTop: "24px" }}>
                     <button
@@ -2570,6 +2716,9 @@ function App() {
                 </section>
               )}
 
+              {auditHistory.length > 0 && (
+                <section className="simulation-audit">
+                  <h3>Simulation audit history</h3>
                   {auditHistory.map((entry, index) => {
                     const action = String(
                       entry.action || entry.event_type || ""
@@ -2754,11 +2903,11 @@ function App() {
                       </article>
                     );
                   })}
-                </div>
+                </section>
               )}
             </section>
           </section>
-               ) : effectivePage === "Reports" ? (
+        ) : effectivePage === "Reports" ? (
           <section className="report-page">
             <div className="report-header">
               <span className="report-eyebrow">INVESTIGATION REPORTS</span>
