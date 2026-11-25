@@ -32,6 +32,14 @@ const menuItems = [
 ];
 
 const pageNames = menuItems.map((item) => item.label);
+// Display a compact evidence ID without changing the original ID.
+function formatEvidenceId(evidenceId) {
+  if (!evidenceId) return "N/A";
+
+  const match = String(evidenceId).match(/-(\d{4})$/);
+
+  return match ? `EV-${match[1]}` : evidenceId;
+}
 
 const evidenceSourceLabels = {
   authentication: "Authentication",
@@ -1544,6 +1552,9 @@ function App() {
                 </span>
               </div>
             </header>
+        ) : effectivePage === "Evidence Graph" ? (
+          /* EVIDENCE GRAPH - REAL BACKEND DATA */
+          <section className="graph-page">
 
             {workspaceError && (
               <p className="forensic-message forensic-error" role="alert">
@@ -2195,7 +2206,74 @@ function App() {
                     </p>
                   </div>
                 )}
-              </aside>
+              </div>
+
+              <div className="graph-legend">
+                {selectedEvidence && (
+                  <div className="information-card">
+                    <h3>{selectedEvidence.name}</h3>
+
+                    <p>
+                      Evidence ID: {selectedEvidence.id}
+                    </p>
+
+                    <p>
+                      Type: {selectedEvidence.type}
+                    </p>
+
+                    <p>
+                      Status: {selectedEvidence.status}
+                    </p>
+
+                    <p>{selectedEvidence.description}</p>
+
+                    <button
+                      onClick={() => setSelectedEvidence(null)}
+                    >
+                      Close Details
+                    </button>
+                  </div>
+                )}
+
+                <h3>Graph Legend</h3>
+
+                  <div className="graph-legend-item">
+                    <span className="graph-legend-swatch graph-swatch-entity" />
+                    <span>Entity Relationship</span>
+                  </div>
+
+                  <div className="graph-legend-item">
+                    <span className="graph-legend-swatch graph-swatch-temporal" />
+                    <span>Temporal Relationship</span>
+                  </div>
+
+                  <div className="graph-legend-item">
+                    <span className="graph-legend-swatch graph-swatch-sequence" />
+                    <span>Sequence Relationship</span>
+                  </div>
+
+                  <div className="graph-legend-item">
+                    <span className="graph-legend-swatch graph-swatch-other" />
+                    <span>Other Relationships</span>
+                  </div>
+
+                  <div className="graph-legend-item">
+                    <span className="graph-legend-swatch graph-swatch-selected" />
+                    <span>Selected Evidence Connections</span>
+                  </div>
+
+                  <p className="graph-legend-note">
+                    Entity: Shared entity or user relationship.
+                    Temporal: Time-based relationship.
+                    Sequence: Event sequence relationship.
+                    Other: Supporting evidence relationship.
+                    Select an evidence node to highlight its connections.
+                  </p>
+
+                  <p>Total Nodes: {graphData.nodes.length}</p>
+
+                  <p>Total Relationships: {graphData.edges.length}</p>
+              </div>
             </div>
           </section>
         ) : effectivePage === "What-If Simulator" ? (
@@ -2285,11 +2363,34 @@ function App() {
                       ))}
                     </select>
                   </label>
-                  <div className="simulator-form-actions">
-                    <p>
-                      Baseline:{" "}
-                      <code>{analysisResult.baseline_analysis_id}</code>
-                    </p>
+
+                  <select
+                    id="evidenceSelect"
+                    value={selectedEvidenceId}
+                    onChange={(event) =>
+                      setSelectedEvidenceId(event.target.value)
+                    }
+                    style={{
+                      padding: "10px",
+                      width: "100%",
+                      maxWidth: "450px",
+                      marginTop: "8px",
+                    }}
+                  >
+                    <option value="">Choose evidence</option>
+
+                    {evidenceRecords.map((record) => (
+                      <option
+                        key={record.evidence_id}
+                        value={record.evidence_id}
+                      >
+                        {formatEvidenceId(record.evidence_id)} — {record.event_type} (
+                        {record.source_type})
+                      </option>
+                    ))}
+                  </select>
+
+                  <div style={{ marginTop: "24px" }}>
                     <button
                       className="primary-button"
                       type="button"
@@ -2469,307 +2570,570 @@ function App() {
                 </section>
               )}
 
-              {auditHistory.length > 0 && (
-                <section className="simulation-audit">
-                  <h3>Scenario activity</h3>
-                  <ul>
-                    {auditHistory.map((entry, index) => (
-                      <li key={entry.audit_id || index}>
-                        <strong>
-                          {entry.action || entry.event_type || "Recorded action"}
-                        </strong>
-                        <time>
-                          {entry.timestamp ||
-                            entry.created_at ||
-                            "Timestamp unavailable"}
-                        </time>
-                        {entry.evidence_id && (
-                          <span>Evidence: {entry.evidence_id}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </section>
+                  {auditHistory.map((entry, index) => {
+                    const action = String(
+                      entry.action || entry.event_type || ""
+                    ).toUpperCase();
+
+                    const activityDetails = {
+                      SCENARIO_CREATED: {
+                        title: "Simulation Scenario Created",
+                        description:
+                          "A new hypothetical investigation scenario was created. The original evidence and baseline analysis remain unchanged.",
+                        icon: "🧪",
+                        color: "#287bd1",
+                      },
+                      EVENT_EXCLUDED: {
+                        title: "Evidence Excluded",
+                        description:
+                          "An evidence record was excluded from this hypothetical scenario to evaluate how its removal affects the investigation.",
+                        icon: "📁",
+                        color: "#d97706",
+                      },
+                      SIMULATION_EXECUTED: {
+                        title: "Simulation Executed",
+                        description:
+                          "The forensic analysis was re-evaluated using the modified evidence set.",
+                        icon: "⚙️",
+                        color: "#7c3aed",
+                      },
+                      COMPARISON_GENERATED: {
+                        title: "Baseline Comparison Generated",
+                        description:
+                          "The simulated results were compared with the original baseline to identify changes in findings and relationships.",
+                        icon: "📊",
+                        color: "#0f9d78",
+                      },
+                    };
+
+                    const activity = activityDetails[action] || {
+                      title: action
+                        ? action.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase())
+                        : `Investigation Activity ${index + 1}`,
+                      description:
+                        "An investigation activity was recorded in the audit trail.",
+                      icon: "📋",
+                      color: "#64748b",
+                    };
+
+                    const timestamp = entry.timestamp || entry.created_at;
+
+                    return (
+                      <article
+                        key={entry.audit_id || index}
+                        style={{
+                          background: "#ffffff",
+                          border: "1px solid #e2e8f0",
+                          borderLeft: `4px solid ${activity.color}`,
+                          borderRadius: "12px",
+                          padding: "20px",
+                          marginTop: "14px",
+                          boxShadow: "0 3px 12px rgba(15, 23, 42, 0.04)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "42px",
+                              height: "42px",
+                              borderRadius: "10px",
+                              background: "#f1f5f9",
+                              display: "grid",
+                              placeItems: "center",
+                              fontSize: "21px",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {activity.icon}
+                          </div>
+
+                          <div style={{ flex: 1 }}>
+                            <strong style={{ color: "#17365f", fontSize: "15px" }}>
+                              {activity.title}
+                            </strong>
+
+                            <p
+                              style={{
+                                margin: "5px 0 0",
+                                color: "#64748b",
+                                fontSize: "12px",
+                              }}
+                            >
+                              {timestamp
+                                ? new Date(timestamp).toLocaleString()
+                                : "Timestamp unavailable"}
+                            </p>
+                          </div>
+
+                          <span
+                            style={{
+                              background: "#f1f5f9",
+                              color: activity.color,
+                              padding: "5px 10px",
+                              borderRadius: "20px",
+                              fontSize: "11px",
+                              fontWeight: 700,
+                            }}
+                          >
+                            RECORDED
+                          </span>
+                        </div>
+
+                        <p
+                          style={{
+                            color: "#475569",
+                            lineHeight: 1.6,
+                            margin: "16px 0",
+                            fontSize: "13px",
+                          }}
+                        >
+                          {activity.description}
+                        </p>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "18px",
+                            fontSize: "12px",
+                            color: "#64748b",
+                          }}
+                        >
+                          {entry.evidence_id && (
+                            <span>
+                              <strong>Evidence:</strong> {entry.evidence_id}
+                            </span>
+                          )}
+
+                          {entry.scenario_id && (
+                            <span>
+                              <strong>Scenario:</strong> {entry.scenario_id}
+                            </span>
+                          )}
+
+                          {entry.audit_id && (
+                            <span>
+                              <strong>Audit ID:</strong> {entry.audit_id}
+                            </span>
+                          )}
+                        </div>
+
+                        <details style={{ marginTop: "16px" }}>
+                          <summary
+                            style={{
+                              cursor: "pointer",
+                              color: "#287bd1",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                            }}
+                          >
+                            View Technical Audit Record
+                          </summary>
+
+                          <pre
+                            style={{
+                              whiteSpace: "pre-wrap",
+                              overflowX: "auto",
+                              background: "#f8fafc",
+                              padding: "14px",
+                              borderRadius: "8px",
+                              fontSize: "11px",
+                              color: "#334155",
+                              marginTop: "12px",
+                            }}
+                          >
+                            {JSON.stringify(entry, null, 2)}
+                          </pre>
+                        </details>
+                      </article>
+                    );
+                  })}
+                </div>
               )}
             </section>
           </section>
-        ) : effectivePage === "Reports" ? (
-          <section className="reports-page">
-            <p className="reports-description">
-              Review the analysis generated for the selected investigation.
-              Reports reflect the current persisted investigation analysis.
-            </p>
-            {workspaceError && (
-              <p className="forensic-message forensic-error" role="alert">
-                {workspaceError}
+               ) : effectivePage === "Reports" ? (
+          <section className="report-page">
+            <div className="report-header">
+              <span className="report-eyebrow">INVESTIGATION REPORTS</span>
+              <h2 className="report-title">Forensic Analysis Report</h2>
+              <p className="report-subtitle">
+                A consolidated overview of digital evidence, detection findings,
+                anomalies and potential evidence relationships.
               </p>
-            )}
+            </div>
 
-            <section className="report-list-section">
-              <div className="simple-section-heading">
-                <h2>Current investigation report</h2>
-                <p>Generated from the selected investigation's analysis data.</p>
-              </div>
-              {workspaceLoading ? (
-                <p className="simple-empty-state" role="status">
-                  Loading report data...
+            {!analysisResult ? (
+              <div className="report-empty">
+                <h3>No Investigation Available</h3>
+                <p>
+                  Add evidence from Evidence Explorer to generate this
+                  investigation's forensic report.
                 </p>
-              ) : !analysisResult ? (
-                <div className="simple-empty-state">
-                  <p>
-                    No analysis report is available. Add evidence and wait for
-                    the investigation analysis to complete.
-                  </p>
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() => setActivePage("Evidence Explorer")}
-                  >
-                    Open Evidence Explorer
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="report-list-row">
-                    <div className="report-list-title">
-                      <strong>{investigation.name} — Forensic analysis</strong>
-                      <span>
-                        Investigation: {investigation.investigation_id}
-                      </span>
-                      <span>
-                        Analysis reference:{" "}
-                        {analysisResult.baseline_analysis_id ||
-                          investigation.baseline_analysis_id ||
-                          "Unavailable"}
-                      </span>
-                    </div>
-                    <time
-                      dateTime={
-                        investigation.updated_at ||
-                        analysisResult.metadata?.acquired_at
-                      }
-                    >
-                      Investigation updated{" "}
-                      {investigation.updated_at ||
-                        analysisResult.metadata?.acquired_at ||
-                        "Timestamp unavailable"}
-                    </time>
-                    <span className="report-status">Available</span>
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      aria-expanded={reportPreviewOpen}
-                      onClick={() =>
-                        setReportPreviewOpen((isOpen) => !isOpen)
-                      }
-                    >
-                      {reportPreviewOpen ? "Close preview" : "Preview report"}
-                    </button>
-                  </div>
-
-                  {reportPreviewOpen && (
-                    <section className="report-preview">
-                      <div className="report-preview-heading">
-                        <div>
-                          <h3>Analysis preview</h3>
-                          <p>
-                            {investigation.name} ·{" "}
-                            {investigation.investigation_id}
-                          </p>
-                        </div>
-                        <span className="report-status">Current analysis</span>
+              </div>
+            ) : (
+              <>
+                {/* REPORT SUMMARY */}
+                <div className="report-summary-grid report-overview-grid">
+                  {[
+                    {
+                      label: "Investigation ID",
+                      value: investigationId || "N/A",
+                      icon: "🔎",
+                      description: "Active investigation",
+                    },
+                    {
+                      label: "Total Evidence",
+                      value: evidenceRecords.length,
+                      icon: "📁",
+                      description: "Evidence files analyzed",
+                    },
+                    {
+                      label: "Total Findings",
+                      value: analysisResult.detection?.total_findings ?? 0,
+                      icon: "⚠️",
+                      description: "Detection findings",
+                    },
+                    {
+                      label: "Total Relationships",
+                      value:
+                        analysisResult.correlation?.total_relationships ??
+                        analysisResult.correlation?.relationships?.length ?? 0,
+                      icon: "🔗",
+                      description: "Potential evidence links",
+                    },
+                  ].map((item) => (
+                    <div className="report-metric-card report-overview-card" key={item.label}>
+                      <div className="report-overview-top">
+                        <span className="report-overview-icon">{item.icon}</span>
+                        <span className="report-metric-label">{item.label}</span>
                       </div>
 
-                      <section className="report-data-section">
-                        <h4>Findings</h4>
-                        {analysisResult.detection?.findings?.length ? (
-                          <div className="report-table-wrap">
-                            <table className="report-table">
-                              <thead>
-                                <tr>
-                                  <th>Finding</th>
-                                  <th>Severity</th>
-                                  <th>Evidence</th>
-                                  <th>Timestamp</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {analysisResult.detection.findings.map(
-                                  (finding, index) => (
-                                    <tr
-                                      key={finding.finding_id || index}
-                                    >
-                                      <td>
-                                        <strong>{finding.title}</strong>
-                                        <small>{finding.finding_id}</small>
-                                        <span>{finding.description}</span>
-                                      </td>
-                                      <td>
-                                        {finding.severity || "Not specified"}
-                                      </td>
-                                      <td>
-                                        {finding.evidence_ids?.join(", ") ||
-                                          "Not specified"}
-                                      </td>
-                                      <td>
-                                        {finding.timestamp ||
-                                          "Not specified"}
-                                      </td>
-                                    </tr>
-                                  )
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : (
-                          <p className="report-empty-copy">
-                            No findings are present in this analysis.
-                          </p>
-                        )}
-                      </section>
+                      <strong className="report-metric-value">{item.value}</strong>
 
-                      <section className="report-data-section">
-                        <h4>Anomalies</h4>
-                        {analysisResult.anomaly_detection?.anomalies?.length ? (
-                          <div className="report-table-wrap">
-                            <table className="report-table">
-                              <thead>
-                                <tr>
-                                  <th>Event</th>
-                                  <th>Evidence</th>
-                                  <th>Score</th>
-                                  <th>Timestamp</th>
-                                  <th>Reason</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {analysisResult.anomaly_detection.anomalies.map(
-                                  (anomaly, index) => (
-                                    <tr
-                                      key={anomaly.evidence_id || index}
-                                    >
-                                      <td>
-                                        {anomaly.event_type ||
-                                          "Event type unavailable"}
-                                      </td>
-                                      <td>
-                                        {anomaly.evidence_id ||
-                                          "Not specified"}
-                                      </td>
-                                      <td>
-                                        {anomaly.anomaly_score ?? "Not returned"}
-                                      </td>
-                                      <td>
-                                        {anomaly.timestamp ||
-                                          "Not specified"}
-                                      </td>
-                                      <td>
-                                        {anomaly.reason || "Not specified"}
-                                      </td>
-                                    </tr>
-                                  )
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : (
-                          <p className="report-empty-copy">
-                            No anomalies are present in this analysis.
-                          </p>
-                        )}
-                      </section>
+                      <span className="report-overview-description">
+                        {item.description}
+                      </span>
+                    </div>
+                  ))}
+                </div>
 
-                      <section className="report-data-section">
-                        <h4>Relationships</h4>
-                        {analysisResult.correlation?.relationships?.length ? (
-                          <div className="report-table-wrap">
-                            <table className="report-table">
-                              <thead>
-                                <tr>
-                                  <th>Type</th>
-                                  <th>Source evidence</th>
-                                  <th>Target evidence</th>
-                                  <th>Description</th>
-                                  <th>Score</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {analysisResult.correlation.relationships.map(
-                                  (relationship, index) => (
-                                    <tr
-                                      key={`${relationship.source_evidence_id || ""}-${
-                                        relationship.target_evidence_id || ""
-                                      }-${index}`}
-                                    >
-                                      <td>
-                                        {relationship.relationship_type ||
-                                          "Not specified"}
-                                      </td>
-                                      <td>
-                                        {relationship.source_evidence_id ||
-                                          "Not specified"}
-                                      </td>
-                                      <td>
-                                        {relationship.target_evidence_id ||
-                                          "Not specified"}
-                                      </td>
-                                      <td>
-                                        {relationship.description ||
-                                          "Not specified"}
-                                      </td>
-                                      <td>
-                                        {relationship.relationship_score ??
-                                          "Not returned"}
-                                      </td>
-                                    </tr>
-                                  )
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : (
-                          <p className="report-empty-copy">
-                            No relationships are present in this analysis.
-                          </p>
-                        )}
-                      </section>
+                {/* DETECTION RESULTS */}
+                <div className="report-section">
+                  <h3 className="report-section-title">Detection Results</h3>
 
-                      <section className="report-data-section">
-                        <h4>Entity matches</h4>
-                        {analysisResult.correlation?.entity_matches?.length ? (
-                          <ul className="report-entity-list">
-                            {analysisResult.correlation.entity_matches.map(
-                              (match, index) => (
-                                <li
-                                  key={`${match.entity_type || "entity"}-${index}`}
-                                >
-                                  <strong>{match.entity_type}</strong>
-                                  <span>{match.entity_value}</span>
-                                  <small>
-                                    Evidence:{" "}
-                                    {match.evidence_ids?.join(", ") ||
-                                      "Not specified"}
-                                  </small>
-                                </li>
-                              )
-                            )}
-                          </ul>
-                        ) : (
-                          <p className="report-empty-copy">
-                            No entity matches are present in this analysis.
+                  {analysisResult.detection?.findings?.length > 0 ? (
+                    analysisResult.detection.findings.map((finding, index) => {
+                      const severity = String(
+                        finding.severity || "unknown"
+                      ).toLowerCase();
+
+                      return (
+                        <div
+                          className="report-record-card"
+                          key={finding.finding_id || index}
+                        >
+                          <div className="report-card-top">
+                            <h4 className="report-card-title">
+                              {finding.title || "Detected Finding"}
+                            </h4>
+
+                            <span className={`report-badge report-badge-${severity}`}>
+                              {finding.severity || "Unknown"}
+                            </span>
+                          </div>
+
+                          <div className="report-meta-grid">
+                            <div className="report-meta-item">
+                              <strong>Finding ID</strong>
+                              <span>{finding.finding_id || "N/A"}</span>
+                            </div>
+
+                            <div className="report-meta-item">
+                              <strong>Rule ID</strong>
+                              <span>{finding.rule_id || "N/A"}</span>
+                            </div>
+
+                            <div className="report-meta-item">
+                              <strong>Timestamp</strong>
+                              <span>{finding.timestamp || "N/A"}</span>
+                            </div>
+                          </div>
+
+                          <p className="report-card-detail">
+                            {finding.description || "No description available."}
                           </p>
-                        )}
-                      </section>
-                      <p className="report-disclaimer">
-                        Findings, anomalies and correlations are indicators for
-                        forensic review; correlation alone does not establish
-                        causation or malicious intent.
-                      </p>
-                    </section>
+
+                          <details className="report-evidence-details">
+                            <summary>View Evidence IDs</summary>
+
+                            <p className="report-muted">
+                              {finding.evidence_ids?.length
+                                ? finding.evidence_ids.map((id) => formatEvidenceId(id)).join(", ")
+                                : "No related evidence available."}
+                            </p>
+                          </details>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="report-empty">
+                      No detection findings available.
+                    </p>
                   )}
-                </>
-              )}
-            </section>
+                </div>
+
+                {/* ANOMALY DETECTION */}
+                <div className="report-section">
+                  <h3 className="report-section-title">Anomaly Detection Results</h3>
+
+                  {analysisResult.anomaly_detection?.anomalies?.length > 0 ? (
+                    analysisResult.anomaly_detection.anomalies.map((anomaly, index) => (
+                      <div
+                        className="report-anomaly-card"
+                        key={anomaly.evidence_id || index}
+                      >
+                        <div className="report-card-top">
+                          <h4 className="report-card-title">
+                            {anomaly.event_type || "Anomaly Detected"}
+                          </h4>
+
+                          <span className="report-badge report-badge-warning">
+                            Review Required
+                          </span>
+                        </div>
+
+                        <div className="report-meta-grid">
+                          <div className="report-meta-item">
+                            <strong>Evidence ID</strong>
+                            <span title={anomaly.evidence_id}>
+                              {formatEvidenceId(anomaly.evidence_id)}
+                            </span>
+                          </div>
+
+                          <div className="report-meta-item">
+                            <strong>Anomaly Score</strong>
+                            <span>{anomaly.anomaly_score ?? "N/A"}</span>
+                          </div>
+
+                          <div className="report-meta-item">
+                            <strong>Timestamp</strong>
+                            <span>{anomaly.timestamp || "N/A"}</span>
+                          </div>
+                        </div>
+
+                        <p className="report-card-detail">
+                          <strong>Reason:</strong>{" "}
+                          {anomaly.reason || "No reason available."}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="report-empty">No anomalies detected.</p>
+                  )}
+
+                  <div className="report-anomaly-stats">
+                    <div className="report-metric-card">
+                      <span className="report-metric-label">Total Records</span>
+                      <strong className="report-metric-value">
+                        {analysisResult.anomaly_detection?.total_records ?? 0}
+                      </strong>
+                    </div>
+
+                    <div className="report-metric-card">
+                      <span className="report-metric-label">Anomaly Count</span>
+                      <strong className="report-metric-value">
+                        {analysisResult.anomaly_detection?.anomaly_count ?? 0}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CORRELATION RESULTS */}
+                <div className="report-section report-correlation-section">
+                  <div className="report-correlation-header">
+                    <div>
+                      <span className="report-eyebrow">EVIDENCE ANALYSIS</span>
+                      <h3 className="report-section-title">
+                        Evidence Correlation Results
+                      </h3>
+                      <p className="report-muted">
+                        Potential relationships identified between evidence records.
+                        These links can help investigators explore common entities and activity.
+                      </p>
+                    </div>
+
+                    <span className="report-correlation-count">
+                      {analysisResult.correlation?.relationships?.length ?? 0} Relationships
+                    </span>
+                  </div>
+
+                  {analysisResult.correlation?.relationships?.length > 0 ? (
+                    <>
+                      <div className="report-correlation-info">
+                        <span>Showing first 8 relationships</span>
+                        <span>
+                          Total: {analysisResult.correlation.relationships.length}
+                        </span>
+                      </div>
+
+                      <div className="report-table-wrapper">
+                        <table className="report-table">
+                          <thead>
+                            <tr>
+                              <th>Relationship Type</th>
+                              <th>Source Evidence</th>
+                              <th>Target Evidence</th>
+                              <th>Score</th>
+                              <th>Description</th>
+                            </tr>
+                          </thead>
+
+                          <tbody>
+                            {analysisResult.correlation.relationships
+                              .slice(0, 8)
+                              .map((relationship, index) => (
+                                <tr key={index}>
+                                  <td>
+                                    <span className="report-badge">
+                                      {relationship.relationship_type || "Relationship"}
+                                    </span>
+                                  </td>
+                                  <td title={relationship.source_evidence_id}>
+                                    {formatEvidenceId(relationship.source_evidence_id)}
+                                  </td>
+                                  <td title={relationship.target_evidence_id}>
+                                    {formatEvidenceId(relationship.target_evidence_id)}
+                                  </td>
+                                  <td>
+                                    <span className="report-score">
+                                      {relationship.relationship_score ?? "N/A"}
+                                    </span>
+                                  </td>
+                                  <td>{relationship.description || "N/A"}</td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {analysisResult.correlation.relationships.length > 8 && (
+                        <details className="report-more-details">
+                          <summary>
+                            View remaining{" "}
+                            {analysisResult.correlation.relationships.length - 8} relationships
+                          </summary>
+
+                          <div className="report-table-wrapper">
+                            <table className="report-table">
+                              <thead>
+                                <tr>
+                                  <th>Relationship Type</th>
+                                  <th>Source Evidence</th>
+                                  <th>Target Evidence</th>
+                                  <th>Score</th>
+                                  <th>Description</th>
+                                </tr>
+                              </thead>
+
+                              <tbody>
+                                {analysisResult.correlation.relationships
+                                  .slice(8)
+                                  .map((relationship, index) => (
+                                    <tr key={index + 8}>
+                                      <td>{relationship.relationship_type || "Relationship"}</td>
+                                      <td>{relationship.source_evidence_id || "N/A"}</td>
+                                      <td>{relationship.target_evidence_id || "N/A"}</td>
+                                      <td>{relationship.relationship_score ?? "N/A"}</td>
+                                      <td>{relationship.description || "N/A"}</td>
+                                    </tr>
+                                  ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </details>
+                      )}
+                    </>
+                  ) : (
+                    <p className="report-empty">
+                      No evidence relationships available.
+                    </p>
+                  )}
+                </div>
+
+                {/* ENTITY MATCHES */}
+                <div className="report-section report-entity-section">
+                  <details className="report-entity-details">
+                    <summary>
+                      <span>Entity Matches</span>
+                      <span className="report-entity-count">
+                        {analysisResult.correlation?.entity_matches?.length ?? 0} Entities
+                      </span>
+                    </summary>
+
+                    {analysisResult.correlation?.entity_matches?.length > 0 ? (
+                      <div className="report-entity-grid">
+                        {analysisResult.correlation.entity_matches.map((match, index) => (
+                          <div className="report-entity-card" key={index}>
+                            <div className="report-entity-card-header">
+                              <span className="report-badge">
+                                {match.entity_type || "Entity"}
+                              </span>
+                            </div>
+
+                            <h4 className="report-entity-value">
+                              {match.entity_value || "N/A"}
+                            </h4>
+
+                            <div className="report-evidence-list">
+                              <p className="report-evidence-heading">
+                                Related Evidence
+                                <span>{match.evidence_ids?.length ?? 0}</span>
+                              </p>
+
+                              {match.evidence_ids?.length > 0 ? (
+                                <div className="report-evidence-chips">
+                                  {match.evidence_ids.map((id, idIndex) => (
+                                    <code
+                                      key={idIndex}
+                                      className="report-evidence-chip"
+                                      title={id}
+                                    >
+                                      {formatEvidenceId(id)}
+                                    </code>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="report-muted">No evidence IDs available.</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="report-empty">No entity matches available.</p>
+                    )}
+                  </details>
+                </div>
+
+                {/* REPORT DISCLAIMER */}
+                <div className="report-disclaimer">
+                  <h3>Forensic Analysis Note</h3>
+                  <p>
+                    Detection findings and anomalies are indicators requiring
+                    forensic review. Correlation identifies potential relationships
+                    between evidence records and does not independently establish
+                    causation or malicious intent.
+                  </p>
+                </div>
+              </>
+            )}
           </section>
         ) : (
           <section className="welcome-card page-placeholder">

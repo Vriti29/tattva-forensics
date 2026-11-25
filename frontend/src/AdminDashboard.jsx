@@ -302,9 +302,8 @@ export function AdminDashboard() {
                 </option>
               ))}
             </select>
-            <p id="new-user-password-help" className="admin-help">
-              Passwords must contain 12 to 256 characters. The user must change
-              the initial password before accessing cases.
+            <p className="admin-help">
+              Passwords must contain 8 to 15 characters. The user must change the initial password before accessing cases.
             </p>
             <button
               className="primary-button"
@@ -312,7 +311,7 @@ export function AdminDashboard() {
               disabled={
                 busy === "create-user" ||
                 !newUser.username.trim() ||
-                newUser.password.length < 12
+                newUser.password.length < 8 || newUser.password.length > 15
               }
             >
               {busy === "create-user" ? "Creating account..." : "Create account"}
@@ -321,14 +320,67 @@ export function AdminDashboard() {
         </section>
 
         <section className="management-card admin-audit-card">
-          <h3>Audit Activity</h3>
-          <div className="admin-audit-unavailable" role="status">
-            <strong>Audit events unavailable</strong>
-            <p>
-              The backend does not provide an audit read endpoint yet. No
-              activity records are shown.
-            </p>
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">SECURITY OVERVIEW</span>
+              <h3>Access & Security Overview</h3>
+              <p>Live account and investigation access summary.</p>
+            </div>
+            <span className="status-pill">Current Snapshot</span>
           </div>
+
+          <div className="admin-security-grid">
+            <div className="admin-security-stat">
+              <span className="security-stat-icon">👥</span>
+              <strong>{users.length}</strong>
+              <span>Total Accounts</span>
+            </div>
+
+            <div className="admin-security-stat">
+              <span className="security-stat-icon">🟢</span>
+              <strong>
+                {users.filter((user) => user.is_active).length}
+              </strong>
+              <span>Active Accounts</span>
+            </div>
+
+            <div className="admin-security-stat">
+              <span className="security-stat-icon">🛡️</span>
+              <strong>
+                {users.filter((user) => user.role === "ADMIN").length}
+              </strong>
+              <span>Administrators</span>
+            </div>
+
+            <div className="admin-security-stat">
+              <span className="security-stat-icon">🔎</span>
+              <strong>
+                {users.filter((user) =>
+                  ["INVESTIGATOR", "LEAD_INVESTIGATOR"].includes(user.role)
+                ).length}
+              </strong>
+              <span>Investigators</span>
+            </div>
+          </div>
+
+          <div className="admin-security-footer">
+            <div>
+              <strong>{investigations.length}</strong>
+              <span> Investigations registered</span>
+            </div>
+            <div>
+              <strong>
+                {users.filter((user) => !user.is_active).length}
+              </strong>
+              <span> Inactive accounts</span>
+            </div>
+          </div>
+
+          <p className="admin-help">
+            Account statistics update when the dashboard is refreshed.
+            Detailed audit events are not displayed because the current
+            backend does not expose an audit-history read endpoint.
+          </p>
         </section>
       </div>
 
