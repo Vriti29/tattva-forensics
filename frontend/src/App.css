@@ -1,6 +1,5 @@
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
+@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap');
 * {
   margin: 0;
   padding: 0;
@@ -8,7 +7,8 @@
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Comic Neue';
+  font-size: 40px;
   background: #f3f5fa;
   color: #172b4d;
 }
@@ -4116,17 +4116,31 @@ button {
 
 .evidence-upload-panel {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(170px, 1.2fr) auto;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(220px, 1fr) minmax(200px, 1fr) auto;
   align-items: end;
-  gap: 12px;
-  width: min(100%, 570px);
-  padding: 16px;
+  gap: 18px;
+  width: 100%;
+  max-width: none;
+  padding: 22px 24px;
 }
 
 .evidence-upload-panel > div:first-child {
-  grid-column: 1 / -1;
+  grid-column: auto;
 }
 
+/* Evidence Explorer: stack introduction and ingestion panel */
+.evidence-page .forensic-page-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  gap: 22px;
+  align-items: stretch;
+}
+
+.evidence-page .forensic-page-intro {
+  width: 100%;
+  max-width: none;
+}
 .evidence-upload-panel > div p,
 .evidence-access-note p {
   margin-top: 5px;
@@ -4991,9 +5005,7 @@ button {
     grid-column: 1 / -1;
   }
 
-  .evidence-upload-panel {
-    grid-template-columns: minmax(0, 1fr);
-  }
+  
 
   .evidence-upload-panel > div:first-child,
   .evidence-upload-panel .upload-progress {
@@ -7423,5 +7435,1157 @@ button {
 @media (max-width: 600px) {
   .admin-security-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+:root {
+  --tf-indigo: #312c51;
+  --tf-violet: #48426d;
+  --tf-violet-light: #5a527e;
+  --tf-violet-mid: #393453;
+  --tf-violet-deep: #302b4b;
+  --tf-indigo-deep: #171426;
+  --tf-indigo-mid: #211d38;
+  --tf-indigo-soft: #282440;
+  --tf-sand: #f0c38e;
+  --tf-sand-deep: #a97945;
+  --tf-sand-mid: #c99c69;
+  --tf-sand-light: #f6d7b3;
+  --tf-coral: #f1aa9b;
+  --tf-coral-deep: #a65f59;
+  --tf-coral-mid: #c77e75;
+  --tf-coral-light: #f5c1b6;
+  --tf-text: #fbf7f1;
+  --tf-muted: #d0cada;
+  --tf-heading-font: "Manrope", "Avenir Next", Inter, sans-serif;
+  --tf-script-font: "Caveat";
+  --tf-body-font: Inter, "Segoe UI", sans-serif;
+  --tf-sand-rgb: 240, 195, 142;
+  --tf-coral-rgb: 241, 170, 155;
+  --tf-violet-rgb: 72, 66, 109;
+  --tf-indigo-rgb: 49, 44, 81;
+}
+
+.app-container.dashboard-shell,
+.app-container.reference-theme-shell {
+  --color-navy-950: var(--tf-indigo-deep);
+  --color-navy-900: var(--tf-indigo-mid);
+  --color-navy-800: var(--tf-indigo);
+  --color-surface: var(--tf-violet-deep);
+  --color-border: rgba(var(--tf-sand-rgb), 0.17);
+  --color-text: var(--tf-text);
+  --color-muted: var(--tf-muted);
+  --color-orange: var(--tf-sand);
+  --color-blue: var(--tf-coral);
+  --radius-card: 16px;
+  --shadow-elevated: 0 16px 38px rgba(22, 18, 38, 0.24);
+  --heading: var(--tf-heading-font);
+  color-scheme: dark;
+  background:
+    linear-gradient(rgba(23, 20, 38, 0.12), rgba(23, 20, 38, 0.12)),
+    var(--fingerprint-background-image, none),
+    radial-gradient(
+      ellipse at 84% 3%,
+      rgba(var(--tf-violet-rgb), 0.34),
+      transparent 35rem
+    ),
+    radial-gradient(
+      ellipse at 13% 48%,
+      rgba(90, 82, 126, 0.2),
+      transparent 43rem
+    ),
+    radial-gradient(
+      ellipse at 74% 92%,
+      rgba(var(--tf-sand-rgb), 0.045),
+      transparent 38rem
+    ),
+    linear-gradient(
+      132deg,
+      var(--tf-indigo-deep) 0%,
+      var(--tf-indigo-mid) 42%,
+      var(--tf-indigo-soft) 76%,
+      var(--tf-indigo) 100%
+    );
+  background-size: cover, cover, auto, auto, auto, auto;
+  background-position:
+    center center,
+    center center,
+    84% 3%,
+    13% 48%,
+    74% 92%,
+    center center;
+  background-repeat: no-repeat;
+  background-attachment: scroll, fixed, scroll, scroll, scroll, scroll;
+  color: var(--tf-text);
+  font-family: var(--tf-body-font);
+}
+
+.dashboard-shell .app-navigation,
+.reference-theme-shell .app-navigation {
+  border-bottom-color: rgba(var(--tf-sand-rgb), 0.18);
+  background:
+    linear-gradient(
+      112deg,
+      rgba(49, 44, 81, 0.96),
+      rgba(33, 29, 56, 0.94) 56%,
+      rgba(57, 52, 83, 0.93)
+    );
+  box-shadow:
+    0 12px 30px rgba(23, 20, 38, 0.22),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(16px);
+}
+
+.dashboard-shell .brand h2,
+.reference-theme-shell .brand h2 {
+  color: var(--tf-text);
+  font-family: var(--tf-heading-font);
+  font-size: 16px;
+}
+
+.dashboard-shell .brand span,
+.reference-theme-shell .brand span {
+  color: var(--tf-muted);
+  font-size: 10px;
+  letter-spacing: 0.55px;
+}
+
+.brand-logo-image {
+  display: block;
+  flex: 0 0 auto;
+  background: transparent;
+  border: 0;
+  object-fit: contain;
+}
+
+.dashboard-shell .nav-item,
+.reference-theme-shell .nav-item {
+  color: #e0dbea;
+  font-size: 13px;
+}
+
+.dashboard-shell .nav-item:hover,
+.reference-theme-shell .nav-item:hover {
+  background: rgba(var(--tf-violet-rgb), 0.68);
+  color: var(--tf-text);
+}
+
+.dashboard-shell .nav-item.active,
+.reference-theme-shell .nav-item.active {
+  border-color: rgba(var(--tf-sand-rgb), 0.38);
+  background: rgba(var(--tf-sand-rgb), 0.12);
+  color: var(--tf-sand-light);
+  box-shadow: inset 0 -2px 0 rgba(var(--tf-sand-rgb), 0.78);
+}
+
+.dashboard-shell .nav-icon,
+.reference-theme-shell .nav-icon {
+  color: var(--tf-sand);
+}
+
+.dashboard-shell .app-navigation button:focus-visible,
+.reference-theme-shell .app-navigation button:focus-visible {
+  outline: 2px solid var(--tf-sand);
+  outline-offset: 3px;
+}
+
+.dashboard-shell .app-navigation-identity strong,
+.reference-theme-shell .app-navigation-identity strong {
+  color: var(--tf-text);
+}
+
+.dashboard-shell .app-navigation-identity small,
+.reference-theme-shell .app-navigation-identity small {
+  color: var(--tf-muted);
+  font-size: 11px;
+}
+
+.dashboard-shell .app-navigation-signout,
+.reference-theme-shell .app-navigation-signout {
+  border-color: rgba(var(--tf-coral-rgb), 0.32);
+  color: var(--tf-coral-light);
+  font-size: 13px;
+}
+
+.dashboard-shell .app-navigation-signout:hover,
+.reference-theme-shell .app-navigation-signout:hover {
+  background: rgba(var(--tf-coral-rgb), 0.12);
+}
+
+.dashboard-shell .topbar h1,
+.reference-theme-shell .topbar h1 {
+  color: var(--tf-text);
+  font-family: var(--tf-heading-font);
+  font-size: clamp(34px, 3.2vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
+
+.dashboard-shell .topbar .eyebrow,
+.reference-theme-shell .topbar .eyebrow {
+  color: var(--tf-sand);
+}
+
+.dashboard-shell .selected-investigation-context strong,
+.reference-theme-shell .selected-investigation-context strong {
+  color: var(--tf-text);
+}
+
+.dashboard-shell .selected-investigation-context small,
+.reference-theme-shell .selected-investigation-context small {
+  color: var(--tf-coral-light);
+}
+
+.dashboard-shell .topbar-actions .secondary-button,
+.reference-theme-shell .topbar-actions .secondary-button {
+  border-color: rgba(var(--tf-sand-rgb), 0.34);
+  background: rgba(var(--tf-violet-rgb), 0.35);
+  color: var(--tf-sand-light);
+}
+
+.dashboard-shell .topbar-actions .secondary-button:hover:not(:disabled),
+.reference-theme-shell .topbar-actions .secondary-button:hover:not(:disabled) {
+  border-color: var(--tf-sand);
+  background: rgba(var(--tf-sand-rgb), 0.1);
+}
+
+.reference-theme-shell .secondary-button {
+  border-color: rgba(var(--tf-coral-rgb), 0.36);
+  background: rgba(var(--tf-violet-rgb), 0.45);
+  color: var(--tf-coral-light);
+}
+
+.reference-theme-shell .secondary-button:hover:not(:disabled) {
+  border-color: var(--tf-sand);
+  background: rgba(var(--tf-sand-rgb), 0.1);
+  color: var(--tf-sand-light);
+}
+
+.dashboard-view h2,
+.dashboard-view h3,
+.dashboard-view h4 {
+  font-family: var(--tf-heading-font);
+}
+
+.dashboard-shell .dashboard-welcome-panel {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(var(--tf-sand-rgb), 0.22);
+  background:
+    radial-gradient(
+      ellipse at 90% 0%,
+      rgba(var(--tf-sand-rgb), 0.11),
+      transparent 34%
+    ),
+    linear-gradient(
+      122deg,
+      rgba(57, 52, 83, 0.97),
+      rgba(48, 43, 75, 0.93) 58%,
+      rgba(72, 66, 109, 0.88)
+    );
+  box-shadow:
+    0 18px 42px rgba(23, 20, 38, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  backdrop-filter: blur(14px);
+}
+
+.dashboard-shell .dashboard-welcome-copy h2 {
+  font-size: clamp(32px, 3.2vw, 39px);
+}
+
+.dashboard-shell .dashboard-panel {
+  border-color: rgba(var(--tf-sand-rgb), 0.17);
+  background:
+    linear-gradient(
+      148deg,
+      rgba(57, 52, 83, 0.86),
+      rgba(48, 43, 75, 0.8) 64%,
+      rgba(57, 52, 83, 0.74)
+    );
+  box-shadow:
+    0 14px 32px rgba(23, 20, 38, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(12px);
+}
+
+.dashboard-shell .dashboard-metric-card {
+  border: 1px solid rgba(var(--tf-sand-rgb), 0.12);
+  border-bottom-color: rgba(var(--tf-sand-rgb), 0.3);
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      142deg,
+      rgba(90, 82, 126, 0.52),
+      rgba(48, 43, 75, 0.88) 65%
+    );
+  box-shadow:
+    0 10px 24px rgba(23, 20, 38, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.dashboard-shell .dashboard-metric-card:first-child {
+  border-color: rgba(var(--tf-sand-rgb), 0.24);
+  background:
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(var(--tf-sand-rgb), 0.14),
+      transparent 55%
+    ),
+    linear-gradient(142deg, rgba(90, 82, 126, 0.62), rgba(48, 43, 75, 0.9));
+}
+
+.dashboard-shell .dashboard-metric-card strong {
+  font-size: 38px;
+}
+
+.dashboard-shell .dashboard-metric-card:nth-child(2) {
+  background:
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(var(--tf-coral-rgb), 0.08),
+      transparent 52%
+    ),
+    linear-gradient(142deg, rgba(57, 52, 83, 0.82), rgba(48, 43, 75, 0.9));
+}
+
+.dashboard-shell .dashboard-metric-card:nth-child(3) {
+  background:
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(var(--tf-sand-rgb), 0.085),
+      transparent 52%
+    ),
+    linear-gradient(142deg, rgba(57, 52, 83, 0.82), rgba(48, 43, 75, 0.9));
+}
+
+.dashboard-shell .administrator-dashboard .dashboard-metric-card:nth-child(4) {
+  background:
+    linear-gradient(142deg, rgba(72, 66, 109, 0.66), rgba(48, 43, 75, 0.9));
+}
+
+.dashboard-shell .dashboard-kicker {
+  color: var(--tf-sand);
+  letter-spacing: 0.75px;
+}
+
+.dashboard-shell .dashboard-view .primary-button {
+  border-color: var(--tf-sand);
+  background: var(--tf-sand);
+  color: var(--tf-indigo-deep);
+}
+
+.dashboard-shell .dashboard-view .primary-button:hover:not(:disabled) {
+  border-color: var(--tf-sand-light);
+  background: var(--tf-sand-light);
+}
+
+.dashboard-shell .dashboard-view .secondary-button {
+  border-color: rgba(var(--tf-coral-rgb), 0.38);
+  background: rgba(var(--tf-coral-rgb), 0.06);
+  color: var(--tf-coral-light);
+}
+
+.dashboard-shell .dashboard-row-action,
+.dashboard-shell .dashboard-text-button {
+  color: var(--tf-sand-light);
+}
+
+.dashboard-shell .dashboard-view .secondary-button:hover:not(:disabled) {
+  border-color: var(--tf-coral);
+  background: rgba(var(--tf-coral-rgb), 0.13);
+}
+
+.dashboard-shell .dashboard-alert {
+  border-color: rgba(var(--tf-coral-rgb), 0.38);
+  background: rgba(var(--tf-coral-rgb), 0.1);
+  color: var(--tf-coral-light);
+}
+
+.dashboard-shell .dashboard-notice {
+  border-color: rgba(var(--tf-sand-rgb), 0.32);
+  background: rgba(var(--tf-sand-rgb), 0.08);
+  color: var(--tf-sand-light);
+}
+
+.dashboard-shell .dashboard-metric-card:first-child strong,
+.dashboard-shell .dashboard-row-action:hover,
+.dashboard-shell .dashboard-text-button:hover,
+.dashboard-shell .dashboard-severity-track > span {
+  color: var(--tf-sand);
+}
+
+.dashboard-shell .dashboard-investigation-row {
+  border-color: rgba(var(--tf-sand-rgb), 0.14);
+  background:
+    linear-gradient(
+      115deg,
+      rgba(48, 43, 75, 0.76),
+      rgba(33, 29, 56, 0.72)
+    );
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.dashboard-shell .dashboard-investigation-row:hover,
+.dashboard-shell .dashboard-investigation-row.is-selected {
+  border-color: rgba(var(--tf-sand-rgb), 0.55);
+  background:
+    linear-gradient(
+      112deg,
+      rgba(var(--tf-sand-rgb), 0.09),
+      rgba(var(--tf-violet-rgb), 0.16)
+    );
+  box-shadow: inset 3px 0 0 var(--tf-sand);
+  transform: translateX(2px);
+}
+
+.dashboard-shell .dashboard-panel-heading h3 {
+  font-size: 23px;
+}
+
+.dashboard-shell .dashboard-status-pill {
+  border-color: rgba(var(--tf-coral-rgb), 0.3);
+  background: rgba(var(--tf-coral-rgb), 0.1);
+  color: var(--tf-coral-light);
+}
+
+.dashboard-shell .dashboard-status-warning {
+  border-color: rgba(var(--tf-coral-rgb), 0.5);
+  background: rgba(var(--tf-coral-rgb), 0.16);
+  color: var(--tf-coral-light);
+}
+
+.dashboard-shell .dashboard-selected-case-stats > div {
+  border-color: rgba(var(--tf-sand-rgb), 0.12);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(var(--tf-violet-rgb), 0.37),
+      rgba(var(--tf-indigo-rgb), 0.28)
+    );
+}
+
+.dashboard-shell .dashboard-severity,
+.dashboard-shell .dashboard-recent-evidence {
+  border-color: rgba(var(--tf-sand-rgb), 0.17);
+}
+
+.dashboard-shell .dashboard-admin-action {
+  border-color: rgba(var(--tf-sand-rgb), 0.18);
+  background:
+    linear-gradient(
+      120deg,
+      rgba(57, 52, 83, 0.68),
+      rgba(33, 29, 56, 0.78)
+    );
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.dashboard-shell .dashboard-admin-action:hover {
+  border-color: rgba(var(--tf-sand-rgb), 0.48);
+  background:
+    linear-gradient(
+      120deg,
+      rgba(var(--tf-sand-rgb), 0.1),
+      rgba(var(--tf-violet-rgb), 0.35)
+    );
+  box-shadow: 0 10px 22px rgba(23, 20, 38, 0.22);
+  transform: translateY(-2px);
+}
+
+.dashboard-shell .dashboard-admin-action-icon {
+  border-color: rgba(var(--tf-sand-rgb), 0.36);
+  background: rgba(var(--tf-sand-rgb), 0.1);
+  color: var(--tf-sand);
+}
+
+.dashboard-shell .dashboard-admin-action:nth-child(2) .dashboard-admin-action-icon {
+  border-color: rgba(var(--tf-coral-rgb), 0.38);
+  background: rgba(var(--tf-coral-rgb), 0.1);
+  color: var(--tf-coral-light);
+}
+
+.dashboard-shell .dashboard-admin-action > span:last-child {
+  color: var(--tf-coral-light);
+}
+
+.dashboard-shell .dashboard-role-track > span {
+  background: var(--tf-coral);
+}
+
+.reference-theme-shell .forensic-page-intro h2,
+.reference-theme-shell .forensic-panel-heading h3,
+.reference-theme-shell .forensic-subheading h4,
+.reference-theme-shell .timeline-selected-event h4 {
+  color: var(--tf-text);
+  font-family: var(--tf-heading-font);
+}
+
+.reference-theme-shell .forensic-panel-heading h3 {
+  font-size: 22px;
+}
+
+.reference-theme-shell .forensic-page-intro p {
+  color: var(--tf-muted);
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.reference-theme-shell .forensic-page-intro h2 {
+  font-size: clamp(34px, 3.2vw, 40px);
+}
+
+.reference-theme-shell .forensic-page-intro .eyebrow,
+.reference-theme-shell .forensic-panel-heading .eyebrow,
+.reference-theme-shell .evidence-upload-panel .eyebrow,
+.reference-theme-shell .evidence-access-note .eyebrow,
+.reference-theme-shell .timeline-associated-file .eyebrow {
+  color: var(--tf-sand);
+  font-size: 12px;
+  letter-spacing: 0.75px;
+}
+
+.reference-theme-shell .evidence-upload-panel,
+.reference-theme-shell .evidence-access-note,
+.reference-theme-shell .evidence-inspector,
+.reference-theme-shell .timeline-inspector {
+  border-color: rgba(var(--tf-sand-rgb), 0.17);
+  backdrop-filter: blur(14px);
+}
+
+.reference-theme-shell .evidence-upload-panel,
+.reference-theme-shell .evidence-access-note {
+  background:
+    radial-gradient(
+      ellipse at 92% 0%,
+      rgba(var(--tf-sand-rgb), 0.1),
+      transparent 48%
+    ),
+    linear-gradient(
+      138deg,
+      rgba(57, 52, 83, 0.93),
+      rgba(48, 43, 75, 0.84)
+    );
+  box-shadow:
+    0 16px 34px rgba(23, 20, 38, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.reference-theme-shell .evidence-inspector,
+.reference-theme-shell .timeline-inspector {
+  background:
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(var(--tf-coral-rgb), 0.08),
+      transparent 42%
+    ),
+    linear-gradient(
+      148deg,
+      rgba(57, 52, 83, 0.95),
+      rgba(48, 43, 75, 0.9) 72%,
+      rgba(33, 29, 56, 0.92)
+    );
+  box-shadow:
+    0 18px 38px rgba(23, 20, 38, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.reference-theme-shell .evidence-register,
+.reference-theme-shell .chronology-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.reference-theme-shell .evidence-register,
+.reference-theme-shell .chronology-panel {
+  padding: 18px 22px 18px 0;
+}
+
+.reference-theme-shell .evidence-overview {
+  gap: 0;
+  border-bottom: 1px solid rgba(var(--tf-sand-rgb), 0.2);
+}
+
+.reference-theme-shell .evidence-overview > div {
+  border: 0;
+  border-right: 1px solid rgba(var(--tf-sand-rgb), 0.16);
+  border-radius: 0;
+  background: transparent;
+}
+
+.reference-theme-shell .evidence-overview > div:last-child {
+  border-right: 0;
+}
+
+.reference-theme-shell .evidence-overview span,
+.reference-theme-shell .forensic-filters label,
+.reference-theme-shell .timeline-control-bar label {
+  color: var(--tf-muted);
+  font-size: 13px;
+}
+
+.reference-theme-shell .evidence-overview strong {
+  color: var(--tf-text);
+  font-family: var(--tf-heading-font);
+  font-size: 30px;
+}
+
+.reference-theme-shell .evidence-overview > div:last-child strong {
+  color: var(--tf-sand);
+}
+
+.reference-theme-shell .evidence-upload-panel input,
+.reference-theme-shell .evidence-upload-panel select,
+.reference-theme-shell .forensic-filters input,
+.reference-theme-shell .forensic-filters select,
+.reference-theme-shell .timeline-control-bar input,
+.reference-theme-shell .timeline-control-bar select {
+  border-color: rgba(var(--tf-sand-rgb), 0.22);
+  background: var(--tf-indigo-deep);
+  color: var(--tf-text);
+  font-size: 14px;
+}
+
+.reference-theme-shell .evidence-upload-panel input:focus-visible,
+.reference-theme-shell .evidence-upload-panel select:focus-visible,
+.reference-theme-shell .forensic-filters input:focus-visible,
+.reference-theme-shell .forensic-filters select:focus-visible,
+.reference-theme-shell .timeline-control-bar input:focus-visible,
+.reference-theme-shell .timeline-control-bar select:focus-visible,
+.reference-theme-shell button:focus-visible {
+  outline-color: var(--tf-sand);
+}
+
+.reference-theme-shell .evidence-upload-panel .primary-button,
+.reference-theme-shell .timeline-inspect-button {
+  background: var(--tf-sand);
+  color: var(--tf-indigo-deep);
+  font-size: 14px;
+}
+
+.reference-theme-shell .evidence-upload-panel .primary-button:hover:not(:disabled),
+.reference-theme-shell .timeline-inspect-button:hover:not(:disabled) {
+  background: var(--tf-sand-light);
+}
+
+.reference-theme-shell .evidence-upload-panel .eyebrow,
+.reference-theme-shell .forensic-selected-mark,
+.reference-theme-shell .forensic-subheading > span:not(.evidence-integrity-badge),
+.reference-theme-shell .upload-progress,
+.reference-theme-shell .text-action {
+  color: var(--tf-sand-light);
+}
+
+.reference-theme-shell .evidence-file-row {
+  position: relative;
+  padding: 15px 12px;
+  border: 0;
+  border-bottom: 1px solid rgba(var(--tf-violet-rgb), 0.78);
+  border-radius: 0;
+  background: transparent;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.reference-theme-shell .evidence-file-row:hover,
+.reference-theme-shell .evidence-file-row.is-selected {
+  border-color: rgba(var(--tf-sand-rgb), 0.5);
+  background: rgba(var(--tf-sand-rgb), 0.07);
+  box-shadow: inset 3px 0 0 var(--tf-sand);
+  transform: translateX(2px);
+}
+
+.reference-theme-shell .evidence-file-row-main > strong,
+.reference-theme-shell .evidence-file-row-time time,
+.reference-theme-shell .evidence-inspector-file h4,
+.reference-theme-shell .forensic-subheading h4 {
+  color: var(--tf-text);
+  font-size: 16px;
+}
+
+.reference-theme-shell .evidence-file-row-meta,
+.reference-theme-shell .evidence-file-row-time {
+  color: var(--tf-muted);
+  font-size: 12px;
+}
+
+.reference-theme-shell .evidence-source-badge,
+.reference-theme-shell .evidence-integrity-badge {
+  border-color: rgba(var(--tf-sand-rgb), 0.3);
+  background: rgba(var(--tf-violet-rgb), 0.7);
+  color: var(--tf-sand-light);
+  font-size: 11px;
+}
+
+.reference-theme-shell .evidence-source-badge.authentication,
+.reference-theme-shell .evidence-source-badge.archive,
+.reference-theme-shell .evidence-integrity-badge.is-missing {
+  border-color: rgba(var(--tf-coral-rgb), 0.42);
+  background: rgba(var(--tf-coral-rgb), 0.12);
+  color: var(--tf-coral-light);
+}
+
+.reference-theme-shell .evidence-source-badge.network,
+.reference-theme-shell .evidence-integrity-badge.is-recorded {
+  border-color: rgba(var(--tf-sand-rgb), 0.4);
+  background: rgba(var(--tf-sand-rgb), 0.1);
+  color: var(--tf-sand-light);
+}
+
+.reference-theme-shell .evidence-source-badge.file,
+.reference-theme-shell .evidence-source-badge.unknown {
+  border-color: rgba(210, 202, 218, 0.27);
+  background: rgba(var(--tf-violet-rgb), 0.56);
+  color: #e4dfee;
+}
+
+.reference-theme-shell .forensic-empty-state {
+  border-color: rgba(var(--tf-sand-rgb), 0.28);
+  color: var(--tf-muted);
+}
+
+.reference-theme-shell .forensic-empty-state h4 {
+  color: var(--tf-text);
+  font-family: var(--tf-heading-font);
+}
+
+.reference-theme-shell .forensic-empty-state .secondary-button,
+.reference-theme-shell .text-action:hover:not(:disabled) {
+  color: var(--tf-sand);
+}
+
+.reference-theme-shell .evidence-inspector-file {
+  border-color: rgba(var(--tf-sand-rgb), 0.18);
+}
+
+.reference-theme-shell .forensic-metadata-item dt,
+.reference-theme-shell .forensic-record-field dt {
+  color: var(--tf-muted);
+  font-size: 12px;
+}
+
+.reference-theme-shell .forensic-metadata-item dd,
+.reference-theme-shell .forensic-record-field dd {
+  color: var(--tf-text);
+  font-size: 13px;
+}
+
+.reference-theme-shell .forensic-metadata-item dd.hash-value,
+.reference-theme-shell .forensic-record-field dd.hash-value {
+  color: var(--tf-sand-light);
+  font-size: 11px;
+}
+
+.reference-theme-shell .forensic-integrity-note {
+  border-color: var(--tf-sand);
+  background:
+    linear-gradient(
+      100deg,
+      rgba(var(--tf-sand-rgb), 0.09),
+      rgba(var(--tf-violet-rgb), 0.12)
+    );
+  color: var(--tf-muted);
+  font-size: 12px;
+}
+
+.reference-theme-shell .associated-record-row {
+  border: 0;
+  border-bottom: 1px solid rgba(var(--tf-violet-rgb), 0.75);
+  border-radius: 0;
+  background: transparent;
+}
+
+.reference-theme-shell .associated-record-row.is-selected {
+  border-color: rgba(var(--tf-sand-rgb), 0.45);
+  background: rgba(var(--tf-sand-rgb), 0.07);
+}
+
+.reference-theme-shell .associated-record-select strong,
+.reference-theme-shell .timeline-associated-file strong {
+  color: var(--tf-text);
+  font-size: 14px;
+}
+
+.reference-theme-shell .associated-record-select time {
+  color: var(--tf-muted);
+  font-size: 12px;
+}
+
+.reference-theme-shell .text-action:hover:not(:disabled) {
+  color: var(--tf-sand-light);
+}
+
+.reference-theme-shell .forensic-record-field {
+  border-color: rgba(var(--tf-sand-rgb), 0.12);
+}
+
+.reference-theme-shell .forensic-integrity-note,
+.reference-theme-shell .forensic-preview-note,
+.reference-theme-shell .forensic-secondary-copy {
+  line-height: 1.6;
+}
+
+.reference-theme-shell .forensic-message.forensic-error {
+  border-color: rgba(var(--tf-coral-rgb), 0.4);
+  background: rgba(var(--tf-coral-rgb), 0.1);
+  color: var(--tf-coral-light);
+}
+
+.reference-theme-shell .forensic-message.forensic-success {
+  border-color: rgba(var(--tf-sand-rgb), 0.35);
+  background: rgba(var(--tf-sand-rgb), 0.08);
+  color: var(--tf-sand-light);
+}
+
+.reference-theme-shell .evidence-integrity-note {
+  border-left-color: var(--tf-sand);
+}
+
+.reference-theme-shell .timeline-control-bar {
+  padding: 8px 0 14px;
+  border: 0;
+  border-bottom: 1px solid rgba(var(--tf-sand-rgb), 0.18);
+  border-radius: 0;
+  background:
+    linear-gradient(
+      95deg,
+      rgba(var(--tf-violet-rgb), 0.22),
+      rgba(var(--tf-violet-rgb), 0.08) 58%,
+      transparent
+    );
+}
+
+.reference-theme-shell .timeline-context-count strong,
+.reference-theme-shell .chronology-event-header time,
+.reference-theme-shell .timeline-selected-event time {
+  color: var(--tf-sand-light);
+}
+
+.reference-theme-shell .timeline-range-note,
+.reference-theme-shell .timeline-context-count {
+  color: var(--tf-muted);
+  font-size: 13px;
+}
+
+.reference-theme-shell .timeline-workspace {
+  grid-template-columns: minmax(0, 1.7fr) minmax(310px, 0.8fr);
+  gap: 24px;
+}
+
+.reference-theme-shell .chronology-panel {
+  min-height: 560px;
+}
+
+.reference-theme-shell .chronology-list {
+  gap: 0;
+  padding-left: 26px;
+}
+
+.reference-theme-shell .chronology-list::before {
+  background: linear-gradient(180deg, var(--tf-sand), var(--tf-coral));
+}
+
+.reference-theme-shell .chronology-marker {
+  border-color: var(--tf-indigo);
+  background: var(--tf-violet-light);
+  box-shadow:
+    0 0 0 1px rgba(var(--tf-sand-rgb), 0.4),
+    0 0 10px rgba(var(--tf-sand-rgb), 0.1);
+}
+
+.reference-theme-shell .chronology-marker.authentication,
+.reference-theme-shell .chronology-marker.archive {
+  background: var(--tf-coral);
+  box-shadow: 0 0 0 1px rgba(var(--tf-coral-rgb), 0.6);
+}
+
+.reference-theme-shell .chronology-marker.network {
+  background: var(--tf-sand);
+  box-shadow: 0 0 0 1px rgba(var(--tf-sand-rgb), 0.6);
+}
+
+.reference-theme-shell .chronology-event {
+  position: relative;
+  gap: 9px;
+  padding: 15px 12px;
+  border: 0;
+  border-bottom: 1px solid rgba(var(--tf-violet-rgb), 0.78);
+  border-radius: 0;
+  background: transparent;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.reference-theme-shell .chronology-event:hover {
+  border-color: rgba(var(--tf-sand-rgb), 0.3);
+  background: rgba(var(--tf-violet-rgb), 0.36);
+  transform: translateX(2px);
+}
+
+.reference-theme-shell .chronology-item.is-selected .chronology-event {
+  border-color: rgba(var(--tf-sand-rgb), 0.55);
+  background: rgba(var(--tf-sand-rgb), 0.08);
+  box-shadow: inset 2px 0 var(--tf-sand);
+}
+
+.reference-theme-shell .chronology-event > strong {
+  color: var(--tf-text);
+  font-family: var(--tf-heading-font);
+  font-size: 17px;
+}
+
+.reference-theme-shell .chronology-event-summary,
+.reference-theme-shell .chronology-event-footer > span {
+  color: var(--tf-muted);
+  font-size: 13px;
+}
+
+.reference-theme-shell .timeline-step-button {
+  border-color: rgba(var(--tf-sand-rgb), 0.25);
+  background: rgba(var(--tf-indigo-rgb), 0.54);
+  color: var(--tf-text);
+}
+
+.reference-theme-shell .timeline-step-button:hover:not(:disabled) {
+  border-color: var(--tf-sand);
+  color: var(--tf-sand-light);
+}
+
+.reference-theme-shell .timeline-selected-event {
+  border-color: rgba(var(--tf-sand-rgb), 0.2);
+}
+
+.reference-theme-shell .timeline-associated-file {
+  border-color: rgba(var(--tf-sand-rgb), 0.28);
+  background: rgba(var(--tf-sand-rgb), 0.07);
+}
+
+.reference-theme-shell .timeline-filter-notice {
+  border-color: rgba(var(--tf-coral-rgb), 0.32);
+  background: rgba(var(--tf-coral-rgb), 0.1);
+  color: var(--tf-coral-light);
+}
+
+.reference-theme-shell .timeline-filter-notice .text-action {
+  color: var(--tf-sand-light);
+}
+
+.reference-theme-shell .evidence-page code,
+.reference-theme-shell .timeline-page code {
+  border-color: rgba(var(--tf-sand-rgb), 0.2);
+  background: rgba(var(--tf-violet-rgb), 0.44);
+  color: var(--tf-sand-light);
+}
+
+@media (max-width: 1120px) {
+  .reference-theme-shell .evidence-register,
+  .reference-theme-shell .chronology-panel {
+    padding: 16px 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .dashboard-shell .topbar h1,
+  .reference-theme-shell .topbar h1 {
+    font-size: 30px;
+  }
+
+  .dashboard-shell .dashboard-metric-card strong {
+    font-size: 35px;
+  }
+
+  .reference-theme-shell .forensic-page-intro p {
+    font-size: 15px;
+  }
+
+  .reference-theme-shell .evidence-overview > div {
+    padding: 12px 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-shell *,
+  .reference-theme-shell * {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+.graph-page .graph-canvas {
+  border-color: rgba(var(--tf-sand-rgb), 0.22);
+  background: rgba(23, 20, 38, 0.96);
+}
+
+.graph-page .graph-connections line {
+  stroke-linecap: round;
+  transition: stroke 160ms ease, stroke-width 160ms ease, opacity 160ms ease;
+}
+
+.graph-page .graph-node {
+  gap: 7px;
+  padding: 11px 13px;
+  border: 1px solid rgba(var(--tf-violet-rgb), 0.9);
+  border-radius: 14px;
+  background: linear-gradient(
+    145deg,
+    rgba(72, 66, 109, 0.97),
+    rgba(33, 29, 56, 0.98)
+  );
+  box-shadow:
+    0 8px 18px rgba(13, 11, 24, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.graph-page .graph-node.authentication,
+.graph-page .graph-node.archive {
+  border-color: rgba(var(--tf-coral-rgb), 0.62);
+}
+
+.graph-page .graph-node.file {
+  border-color: rgba(166, 153, 212, 0.7);
+}
+
+.graph-page .graph-node.network {
+  border-color: rgba(var(--tf-sand-rgb), 0.68);
+}
+
+.graph-page .graph-node:hover {
+  border-color: var(--tf-sand-light);
+  background: linear-gradient(
+    145deg,
+    rgba(90, 82, 126, 0.98),
+    rgba(48, 43, 75, 0.99)
+  );
+  box-shadow: 0 10px 24px rgba(13, 11, 24, 0.42);
+}
+
+.graph-page .graph-node.is-selected {
+  border: 2px solid var(--tf-sand-light);
+  background: linear-gradient(
+    145deg,
+    rgba(90, 82, 126, 0.99),
+    rgba(48, 43, 75, 0.99)
+  );
+  box-shadow:
+    0 0 0 3px rgba(var(--tf-sand-rgb), 0.19),
+    0 12px 26px rgba(13, 11, 24, 0.46);
+  z-index: 5;
+}
+
+.graph-page .graph-node:focus-visible {
+  outline: 2px solid var(--tf-coral-light);
+  outline-offset: 3px;
+}
+
+.graph-page .graph-node > span {
+  color: var(--tf-sand-light);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.45px;
+}
+
+.graph-page .graph-node > strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--tf-text);
+  font-family: var(--tf-heading-font);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-page .graph-node,
+  .graph-page .graph-connections line {
+    transition-duration: 0.01ms;
+  }
+}
+
+.app-container .topbar h1,
+.app-container.investigations-shell .investigations-page-heading h2,
+.app-container.reference-theme-shell .forensic-page-intro h2 {
+  color: var(--tf-text);
+  font-family: var(--tf-heading-font);
+  font-size: 46px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1.12;
+}
+
+.app-container .selected-investigation-context {
+  max-width: 100%;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.app-container .selected-investigation-context > .eyebrow {
+  color: var(--tf-sand);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.65px;
+}
+
+.app-container .selected-investigation-context > strong {
+  max-width: 100%;
+  color: var(--tf-sand-light);
+  font-family: var(--tf-script-font), "Segoe Print", cursive;
+  font-size: 42px !important;
+  font-weight: 700;
+  letter-spacing: 0.15px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.app-container .selected-investigation-context > small {
+  max-width: 100%;
+  color: var(--tf-coral-light);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .app-container .topbar h1,
+  .app-container.investigations-shell .investigations-page-heading h2,
+  .app-container.reference-theme-shell .forensic-page-intro h2 {
+    font-size: 34px;
+  }
+
+  .app-container .selected-investigation-context > .eyebrow,
+  .app-container .selected-investigation-context > small {
+    font-size: 15px;
+  }
+
+  .app-container .selected-investigation-context > strong {
+  font-size: 36px !important;
+  line-height: 1.15;
   }
 }

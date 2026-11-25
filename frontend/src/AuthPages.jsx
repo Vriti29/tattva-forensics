@@ -1,11 +1,17 @@
 import { useState } from "react";
+import tattvaMark from "./assets/tattva-mark.svg";
 
 export function AuthLoadingPage({ message = "Restoring your secure session..." }) {
   return (
     <main className="auth-page">
       <AuthBrand />
       <section className="auth-panel auth-panel-compact" aria-live="polite">
-        <div className="brand-logo auth-logo">TF</div>
+        <img
+          className="brand-logo brand-logo-image auth-logo"
+          src={tattvaMark}
+          alt=""
+          aria-hidden="true"
+        />
         <p className="auth-kicker">SECURE WORKSPACE</p>
         <h1>Restoring access</h1>
         <p className="auth-description">{message}</p>
@@ -18,7 +24,12 @@ function AuthBrand() {
   return (
     <header className="auth-header">
       <a className="auth-wordmark" href="/" aria-label="Tattva Forensics home">
-        <span className="brand-logo">TF</span>
+        <img
+          className="brand-logo brand-logo-image"
+          src={tattvaMark}
+          alt=""
+          aria-hidden="true"
+        />
         <span>
           <strong>TATTVA</strong>
           <small>FORENSICS PLATFORM</small>
@@ -44,7 +55,7 @@ export function LoginPage({ onLogin, notice, connectionError }) {
     setSubmitting(true);
     setError("");
     try {
-      await onLogin(username.trim(), password);
+      await onLogin(username.trim(), password, loginMode);
     } catch (loginError) {
       setError(loginError.message);
     } finally {

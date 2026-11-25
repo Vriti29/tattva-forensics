@@ -79,6 +79,19 @@ def _login(app, username, password):
     return client, response
 
 
+def _login_for_mode(app, username, password, sign_in_as):
+    client, _ = _client_for(app)
+    response = client.post(
+        "/auth/login",
+        json={
+            "username": username,
+            "password": password,
+            "sign_in_as": sign_in_as,
+        },
+    )
+    return client, response
+
+
 def _create_active_assigned_user(
     app,
     admin_client,
@@ -144,6 +157,89 @@ def test_login_uses_secure_cookie_and_stores_only_token_hash(auth_system):
     assert hashlib.sha256(session_cookie.encode("utf-8")).hexdigest() in (
         stored_hashes
     )
+
+
+def test_login_mode_rejects_mismatched_roles_without_creating_sessions(
+    auth_system,
+):
+    app, store, _, admin_client = auth_system
+    investigator_username = "mode-investigator@example.test"
+    investigator_password = "TempPass123"
+    _create_user(
+        admin_client,
+        investigator_username,
+        investigator_password,
+        "INVESTIGATOR",
+    )
+    with sqlite3.connect(store.database_path) as connection:
+        sessions_before = connection.execute(
+            "SELECT COUNT(*) FROM sessions"
+        ).fetchone()[0]
+
+    mismatched_attempts = [
+        _login_for_mode(
+            app,
+            ADMIN_USERNAME,
+            ADMIN_PASSWORD,
+            "investigator",
+        ),
+        _login_for_mode(
+            app,
+            investigator_username,
+            investigator_password,
+            "administrator",
+        ),
+    ]
+    for client, response in mismatched_attempts:
+        assert response.status_code == 403
+        assert response.json()["detail"].startswith(
+            "This account is not authorized for"
+        )
+        assert client.cookies.get("tattva_session") is None
+        assert client.get("/auth/me").status_code == 401
+
+    with sqlite3.connect(store.database_path) as connection:
+        sessions_after = connection.execute(
+            "SELECT COUNT(*) FROM sessions"
+        ).fetchone()[0]
+    assert sessions_after == sessions_before
+
+
+@pytest.mark.parametrize(
+    "role",
+    ["LEAD_INVESTIGATOR", "INVESTIGATOR", "VIEWER"],
+)
+def test_investigator_sign_in_accepts_non_admin_roles(auth_system, role):
+    app, _, _, admin_client = auth_system
+    username = f"{role.lower()}-mode@example.test"
+    password = "TempPass123"
+    _create_user(admin_client, username, password, role)
+
+    client, response = _login_for_mode(
+        app,
+        username,
+        password,
+        "investigator",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user"]["role"] == role
+    assert client.get("/auth/me").json()["role"] == role
+
+
+def test_administrator_sign_in_accepts_admin_role(auth_system):
+    app, _, _, _ = auth_system
+
+    client, response = _login_for_mode(
+        app,
+        ADMIN_USERNAME,
+        ADMIN_PASSWORD,
+        "administrator",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user"]["role"] == "ADMIN"
+    assert client.get("/auth/me").json()["role"] == "ADMIN"
 
 
 def test_invalid_and_inactive_credentials_are_rejected(auth_system):
