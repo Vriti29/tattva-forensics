@@ -8441,16 +8441,16 @@ button {
 
 .graph-page .graph-node {
   gap: 7px;
-  padding: 11px 13px;
+  padding: 8px 10px;
   border: 1px solid rgba(var(--tf-violet-rgb), 0.9);
-  border-radius: 14px;
+  border-radius: 20px;
   background: linear-gradient(
     145deg,
     rgba(72, 66, 109, 0.97),
     rgba(33, 29, 56, 0.98)
   );
   box-shadow:
-    0 8px 18px rgba(13, 11, 24, 0.32),
+    0 4px 10px rgba(13, 11, 24, 0.32),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
   transition:
     border-color 160ms ease,
@@ -8459,18 +8459,11 @@ button {
     transform 160ms ease;
 }
 
-.graph-page .graph-node.authentication,
-.graph-page .graph-node.archive {
-  border-color: rgba(var(--tf-coral-rgb), 0.62);
-}
-
-.graph-page .graph-node.file {
-  border-color: rgba(166, 153, 212, 0.7);
-}
-
-.graph-page .graph-node.network {
-  border-color: rgba(var(--tf-sand-rgb), 0.68);
-}
+.graph-page .graph-node.authentication { border: 1.5px solid #ffaa9b; background: #3c335a; }
+.graph-page .graph-node.file { border: 1.5px solid #f0c38e; background: #4a3424; }
+.graph-page .graph-node.network { border: 1.5px solid #13a89e; background: #133a3d; }
+.graph-page .graph-node.archive { border: 1.5px solid #9254de; background: #2f254b; }
+.graph-page .graph-node.unknown { border: 1.5px solid #8c9bad; background: #282440; }
 
 .graph-page .graph-node:hover {
   border-color: var(--tf-sand-light);
@@ -8483,16 +8476,15 @@ button {
 }
 
 .graph-page .graph-node.is-selected {
-  border: 2px solid var(--tf-sand-light);
+  border: 2px solid #1677ff !important;
+  transform: scale(1.05);
+  box-shadow: 0 0 12px rgba(22, 119, 255, 0.45);
   background: linear-gradient(
     145deg,
     rgba(90, 82, 126, 0.99),
     rgba(48, 43, 75, 0.99)
   );
-  box-shadow:
-    0 0 0 3px rgba(var(--tf-sand-rgb), 0.19),
-    0 12px 26px rgba(13, 11, 24, 0.46);
-  z-index: 5;
+ 
 }
 
 .graph-page .graph-node:focus-visible {
@@ -8588,4 +8580,188 @@ button {
   font-size: 36px !important;
   line-height: 1.15;
   }
+}
+
+/* 1. Inherit exact Tattva Forensics font family & readable base scale on Administration */
+.app-container.admin-shell {
+  font-family: var(--tf-ui-font, "Plus Jakarta Sans", "Segoe UI", sans-serif) !important;
+  font-size: 15px !important;
+  line-height: 1.5 !important;
+  background-color: #1c1733 !important;
+  background-image: url("./assets/fingerprint-background.png") !important;
+  background-size: cover !important;
+  background-position: center top !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+}
+
+.app-container.admin-shell h3 {
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+}
+
+.app-container.admin-shell p,
+.app-container.admin-shell label,
+.app-container.admin-shell .management-page-heading p {
+  font-size: 14px !important;
+  color: #c8c1dc !important;
+}
+
+.app-container.admin-shell small,
+.app-container.admin-shell .management-form p {
+  font-size: 13px !important;
+}
+
+/* 2. Match "All Investigations" button to the warm peach/sand style */
+.app-container.admin-shell .topbar button,
+.app-container.admin-shell .topbar a,
+.app-container.admin-shell .selected-investigation-context + button,
+.app-container.admin-shell .topbar-actions button {
+  background: rgba(56, 48, 86, 0.55) !important;
+  color: var(--tf-sand-light, #f0c38e) !important;
+  border: 1px solid rgba(240, 195, 142, 0.42) !important;
+  border-radius: 12px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  padding: 10px 18px !important;
+}
+
+.app-container.admin-shell .topbar button:hover,
+.app-container.admin-shell .topbar a:hover {
+  background: rgba(240, 195, 142, 0.14) !important;
+  border-color: var(--tf-sand-light, #f0c38e) !important;
+}
+
+/* 3. Clean panels for Create Account, Access & Security Overview, and lower sections */
+.app-container.admin-shell .management-page.admin-dashboard .management-card,
+.app-container.admin-shell .management-page.admin-dashboard .admin-audit-card,
+.app-container.admin-shell .management-page.admin-dashboard .admin-section {
+  background: linear-gradient(
+    180deg,
+    rgba(39, 34, 65, 0.86),
+    rgba(24, 20, 42, 0.92)
+  ) !important;
+  border: 1px solid rgba(240, 195, 142, 0.18) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 18px 40px rgba(10, 8, 22, 0.35) !important;
+  color: #f4f1fa !important;
+}
+
+/* 4. Fix Security Overview block: remove extra inner wrapper box & style only the 4 metric tiles + footer strip */
+.app-container.admin-shell .admin-audit-card > div {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+.app-container.admin-shell .admin-audit-card > div > div,
+.app-container.admin-shell .admin-audit-card article {
+  background: rgba(26, 22, 46, 0.85) !important;
+  border: 1px solid rgba(240, 195, 142, 0.18) !important;
+  border-radius: 14px !important;
+  padding: 16px 18px !important;
+  color: #f4f1fa !important;
+}
+
+.app-container.admin-shell .admin-audit-card strong,
+.app-container.admin-shell .admin-audit-card b {
+  font-size: 28px !important;
+  color: var(--tf-sand-light, #f0c38e) !important;
+}
+
+.app-container.admin-shell .admin-audit-card span {
+  font-size: 13px !important;
+  color: #c8c1dc !important;
+}
+
+/* Keep the SECURITY OVERVIEW eyebrow & Current Snapshot badge clean */
+.app-container.admin-shell .admin-audit-card > div:first-child {
+  margin-bottom: 16px !important;
+}
+
+.app-container.admin-shell .admin-audit-card > div:first-child span:first-child {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  color: var(--tf-sand-light, #f0c38e) !important;
+}
+
+/* 5. Form inputs & Create account button */
+.app-container.admin-shell .management-form input,
+.app-container.admin-shell .management-form select {
+  font-family: inherit !important;
+  font-size: 14px !important;
+  background: rgba(20, 17, 36, 0.9) !important;
+  color: #f4f1fa !important;
+  border: 1px solid rgba(240, 195, 142, 0.24) !important;
+  border-radius: 10px !important;
+  padding: 11px 14px !important;
+}
+
+.app-container.admin-shell .management-form button[type="submit"] {
+  font-family: inherit !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  background: linear-gradient(135deg, #c5895a, #a66a41) !important;
+  color: #161224 !important;
+  border: none !important;
+  border-radius: 10px !important;
+  padding: 11px 20px !important;
+}
+/* Navigation Bar — Match Frosted Purple & Sand-Gold Theme on Administration */
+.app-container.admin-shell header.app-navigation {
+  background: rgba(41, 35, 68, 0.9) !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+  border-bottom: 1px solid rgba(240, 195, 142, 0.18) !important;
+  color: #f4f1fa !important;
+}
+
+/* Nav tab buttons & icons (replaces blue icons with warm sand-gold) */
+.app-container.admin-shell header.app-navigation button,
+.app-container.admin-shell header.app-navigation a {
+  color: #e6e1f2 !important;
+  font-family: inherit !important;
+}
+
+.app-container.admin-shell header.app-navigation svg {
+  color: var(--tf-sand-light, #f0c38e) !important;
+  stroke: var(--tf-sand-light, #f0c38e) !important;
+}
+
+/* Active tab ("Administration") */
+.app-container.admin-shell header.app-navigation button[aria-current="page"],
+.app-container.admin-shell header.app-navigation .active,
+.app-container.admin-shell header.app-navigation .is-active {
+  background: rgba(66, 57, 102, 0.78) !important;
+  border: 1px solid rgba(240, 195, 142, 0.55) !important;
+  color: #ffffff !important;
+  border-radius: 10px !important;
+}
+
+/* User avatar badge & Sign out button in top-right */
+.app-container.admin-shell header.app-navigation [class*="avatar"],
+.app-container.admin-shell header.app-navigation [class*="badge"] {
+  background: rgba(66, 57, 102, 0.85) !important;
+  border: 1px solid rgba(240, 195, 142, 0.35) !important;
+  color: var(--tf-sand-light, #f0c38e) !important;
+}
+/* Change navigation bar icons (and their inner SVG paths/shapes) to peach/sand-gold */
+.app-container.admin-shell header.app-navigation svg,
+.app-container.admin-shell header.app-navigation svg path,
+.app-container.admin-shell header.app-navigation svg circle,
+.app-container.admin-shell header.app-navigation svg rect,
+.app-container.admin-shell header.app-navigation svg line,
+.app-container.admin-shell header.app-navigation svg polyline,
+.app-container.admin-shell header.app-navigation svg polygon,
+.app-container.admin-shell header.app-navigation .nav-icon {
+  color: var(--tf-sand-light, #f0c38e) !important;
+  stroke: var(--tf-sand-light, #f0c38e) !important;
+}
+
+/* Keep the center dot of the gear icon filled with peach without filling hollow outlines */
+.app-container.admin-shell header.app-navigation svg circle[fill]:not([fill="none"]),
+.app-container.admin-shell header.app-navigation svg path[fill]:not([fill="none"]) {
+  fill: var(--tf-sand-light, #f0c38e) !important;
 }

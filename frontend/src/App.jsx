@@ -88,55 +88,47 @@ function getGraphNodePositions(nodes, edges, height) {
     return new Map();
   }
 
-  const columns = Math.min(4, count);
+  const columns = count <= 4 ? count : count <= 9 ? 3 : 5;
   const rows = Math.ceil(count / columns);
   const degrees = new Map(nodes.map((node) => [node.id, 0]));
   edges.forEach((edge) => {
     degrees.set(edge.source, (degrees.get(edge.source) || 0) + 1);
     degrees.set(edge.target, (degrees.get(edge.target) || 0) + 1);
   });
+
+  const padX = 85;
+  const padY = 55;
+  const usableW = 1000 - padX * 2;
+  const usableH = height - padY * 2;
+
   const positionedNodes = nodes.map((node, index) => {
     const row = Math.floor(index / columns);
     const column = index % columns;
     const nodesInRow = Math.min(columns, count - row * columns);
     const degree = degrees.get(node.id) || 0;
-    const hash = String(node.id)
-      .split("")
-      .reduce((value, character) => (value * 31 + character.charCodeAt(0)) >>> 0, 7);
+
+    // Stagger odd rows slightly so vertical edges don't overlap nodes
+    const staggerOffset = row % 2 === 1 ? usableW / (columns * 2.4) : 0;
+    const baseX =
+      nodesInRow === 1
+        ? 500
+        : padX + (column * usableW) / (nodesInRow - 1) + staggerOffset;
+    const baseY =
+      rows === 1 ? height / 2 : padY + (row * usableH) / (rows - 1);
+
     return {
       node,
       degree,
-      width: Math.min(186, 152 + degree * 5),
-      height: Math.min(94, 78 + degree * 2),
-      x: ((column + 0.5) * 1000) / nodesInRow + (hash % 23) - 11,
-      y:
-        rows === 1
-          ? height / 2
-          : 65 +
-            (row * (height - 130)) / (rows - 1) +
-            ((hash >>> 5) % 17) -
-            8,
+      width: 122,
+      height: 54,
+      x: Math.min(1000 - padX, Math.max(padX, baseX)),
+      y: Math.min(height - padY, Math.max(padY, baseY)),
     };
   });
 
+  // Repulsion-only pass to prevent any overlap while keeping full-canvas spread
   if (count <= 180) {
-    const indexById = new Map(
-      positionedNodes.map((position, index) => [position.node.id, index])
-    );
-    const linkedPairs = edges
-      .map((edge) => [
-        indexById.get(edge.source),
-        indexById.get(edge.target),
-      ])
-      .filter(([source, target]) => source != null && target != null);
-    const iterations = 42;
-    const idealSpacing = Math.max(
-      172,
-      Math.min(224, Math.sqrt((1000 * height) / count) * 0.8)
-    );
-
-    for (let iteration = 0; iteration < iterations; iteration += 1) {
-      const forces = positionedNodes.map(() => ({ x: 0, y: 0 }));
+    for (let iteration = 0; iteration < 60; iteration += 1) {
       for (let first = 0; first < count; first += 1) {
         for (let second = first + 1; second < count; second += 1) {
           const a = positionedNodes[first];
@@ -144,46 +136,16 @@ function getGraphNodePositions(nodes, edges, height) {
           const dx = a.x - b.x;
           const dy = a.y - b.y;
           const distance = Math.max(1, Math.hypot(dx, dy));
-          const minimumDistance = (a.width + b.width) / 2 + 30;
-          if (distance < minimumDistance) {
-            const force = (minimumDistance - distance) * 0.035;
-            forces[first].x += (dx / distance) * force;
-            forces[first].y += (dy / distance) * force;
-            forces[second].x -= (dx / distance) * force;
-            forces[second].y -= (dy / distance) * force;
+          const minDistance = 175;
+          if (distance < minDistance) {
+            const push = ((minDistance - distance) / distance) * 0.12;
+            a.x = Math.min(1000 - padX, Math.max(padX, a.x + dx * push));
+            a.y = Math.min(height - padY, Math.max(padY, a.y + dy * push));
+            b.x = Math.min(1000 - padX, Math.max(padX, b.x - dx * push));
+            b.y = Math.min(height - padY, Math.max(padY, b.y - dy * push));
           }
         }
       }
-
-      linkedPairs.forEach(([sourceIndex, targetIndex]) => {
-        const source = positionedNodes[sourceIndex];
-        const target = positionedNodes[targetIndex];
-        const dx = target.x - source.x;
-        const dy = target.y - source.y;
-        const distance = Math.max(1, Math.hypot(dx, dy));
-        if (distance > idealSpacing) {
-          const force = (distance - idealSpacing) * 0.006;
-          forces[sourceIndex].x += (dx / distance) * force;
-          forces[sourceIndex].y += (dy / distance) * force;
-          forces[targetIndex].x -= (dx / distance) * force;
-          forces[targetIndex].y -= (dy / distance) * force;
-        }
-      });
-
-      const maxMovement = 12 * (1 - iteration / iterations) + 1;
-      positionedNodes.forEach((position, index) => {
-        const force = forces[index];
-        const magnitude = Math.max(1, Math.hypot(force.x, force.y));
-        const scale = Math.min(1, maxMovement / magnitude);
-        position.x = Math.min(
-          900,
-          Math.max(100, position.x + force.x * scale)
-        );
-        position.y = Math.min(
-          height - position.height / 2 - 12,
-          Math.max(position.height / 2 + 12, position.y + force.y * scale)
-        );
-      });
     }
   }
 
@@ -191,7 +153,6 @@ function getGraphNodePositions(nodes, edges, height) {
     positionedNodes.map((position) => [position.node.id, position])
   );
 }
-
 function getEvidenceSourceLabel(sourceType) {
   return evidenceSourceLabels[sourceType] || sourceType || "Unknown source";
 }
@@ -953,8 +914,7 @@ function App() {
   );
   const graphColumns = 4;
   const graphRows = Math.ceil(filteredGraphNodes.length / graphColumns);
-  const graphCanvasHeight =
-    Math.max(590, graphRows * 180 + 80);
+  const graphCanvasHeight =Math.max(460, graphRows * 145 + 40);
   const graphNodePositions = useMemo(
     () =>
       getGraphNodePositions(
@@ -2184,6 +2144,7 @@ function App() {
                     className="graph-visualization"
                     style={{ height: `${graphCanvasHeight}px` }}
                   >
+
                     <svg
                       className="graph-connections"
                       viewBox={`0 0 1000 ${graphCanvasHeight}`}
@@ -2194,35 +2155,57 @@ function App() {
                       {filteredGraphEdges.map((edge, index) => {
                         const source = graphNodePositions.get(edge.source);
                         const target = graphNodePositions.get(edge.target);
-                        if (!source || !target) {
-                          return null;
+                        if (!source || !target) return null;
+                      
+                        const type = String(edge.relationship_type || "").toLowerCase();
+                        let edgeColor = "#8c9bad"; // Other Relationships (grey)
+                        if (type.includes("entity") || type.includes("user")) {
+                          edgeColor = "#13a89e"; // Entity Relationship (teal)
+                        } else if (type.includes("temporal") || type.includes("time")) {
+                          edgeColor = "#9254de"; // Temporal Relationship (purple)
+                        } else if (type.includes("sequence") || type.includes("order")) {
+                          edgeColor = "#fa8c16"; // Sequence Relationship (orange)
                         }
+                      
+                        const hasSelection = Boolean(selectedEvidence?.id);
                         const isSelected =
                           selectedEvidence?.id === edge.source ||
                           selectedEvidence?.id === edge.target;
+                      
                         return (
-                          <line
-                            key={`${edge.source}-${edge.target}-${index}`}
-                            x1={source.x}
-                            y1={source.y}
-                            x2={target.x}
-                            y2={target.y}
-                            stroke={isSelected ? "#f6d7b3" : "#a69ad4"}
-                            strokeWidth={isSelected ? "3" : "1.75"}
-                            strokeOpacity={isSelected ? "1" : "0.72"}
-                            vectorEffect="non-scaling-stroke"
-                          >
-                            <title>
-                              {edge.relationship_type ||
-                                "Relationship type unavailable"}
-                              {edge.description
-                                ? `: ${edge.description}`
-                                : ""}
-                              {edge.relationship_score != null
-                                ? ` (score ${edge.relationship_score})`
-                                : ""}
-                            </title>
-                          </line>
+                          <g key={`${edge.source}-${edge.target}-${index}`}>
+                            <line
+                              x1={source.x}
+                              y1={source.y}
+                              x2={target.x}
+                              y2={target.y}
+                              stroke={edgeColor}
+                              strokeWidth={isSelected ? "2.6" : "1.4"}
+                              strokeOpacity={
+                                !hasSelection ? "0.65" : isSelected ? "1" : "0.1"
+                              }
+                              vectorEffect="non-scaling-stroke"
+                            >
+                              <title>
+                                {edge.relationship_type || "Relationship"}
+                                {edge.description ? `: ${edge.description}` : ""}
+                              </title>
+                            </line>
+                            {/* Only show edge text labels when a node is selected so text doesn't pile up */}
+                            {isSelected && (
+                              <text
+                                x={(source.x + target.x) / 2}
+                                y={(source.y + target.y) / 2 - 5}
+                                fill={edgeColor}
+                                fontSize="9"
+                                fontWeight="700"
+                                textAnchor="middle"
+                                style={{ pointerEvents: "none" }}
+                              >
+                                {edge.relationship_type}
+                              </text>
+                            )}
+                          </g>
                         );
                       })}
                     </svg>
