@@ -10,7 +10,7 @@ from backend.auth.passwords import hash_password
 
 
 ADMIN_USERNAME = "root@example.test"
-ADMIN_PASSWORD = "Admin-password-123"
+ADMIN_PASSWORD = "Admin123"
 
 
 def _client_for(
@@ -86,8 +86,8 @@ def _create_active_assigned_user(
     username,
     role="INVESTIGATOR",
 ):
-    initial_password = "Temporary-password-123"
-    changed_password = "Changed-password-123"
+    initial_password = "TempPass123"
+    changed_password = "Changed123"
     user = _create_user(admin_client, username, initial_password, role)
     assignment = admin_client.post(
         f"/investigations/{investigation_id}/assignments",
@@ -154,13 +154,13 @@ def test_invalid_and_inactive_credentials_are_rejected(auth_system):
     created = _create_user(
         client,
         "inactive@example.test",
-        "Temporary-password-123",
+        "TempPass123",
         "INVESTIGATOR",
     )
     active_client, active_response = _login(
         app,
         "inactive@example.test",
-        "Temporary-password-123",
+        "TempPass123",
     )
     assert active_response.status_code == 200
     store.update_user(created["user_id"], is_active=False)
@@ -168,7 +168,7 @@ def test_invalid_and_inactive_credentials_are_rejected(auth_system):
     inactive, response = _login(
         app,
         "inactive@example.test",
-        "Temporary-password-123",
+        "TempPass123",
     )
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid username or password"
@@ -233,7 +233,7 @@ def test_password_change_revokes_all_existing_sessions(auth_system):
     second_client, response = _login(
         app,
         username,
-        "Changed-password-123",
+        "Changed123",
     )
     assert response.status_code == 200
     assert first_client.get(
@@ -246,8 +246,8 @@ def test_password_change_revokes_all_existing_sessions(auth_system):
     changed = second_client.post(
         "/auth/password",
         json={
-            "current_password": "Changed-password-123",
-            "new_password": "Final-password-123",
+            "current_password": "Changed123",
+            "new_password": "FinalPass123",
         },
     )
     assert changed.status_code == 204
@@ -261,7 +261,7 @@ def test_password_change_revokes_all_existing_sessions(auth_system):
     replacement, response = _login(
         app,
         username,
-        "Final-password-123",
+        "FinalPass123",
     )
     assert response.status_code == 200
     assert replacement.get(
@@ -375,13 +375,13 @@ def test_logout_preserves_other_sessions_until_password_change(auth_system):
     remaining_client, response = _login(
         app,
         username,
-        "Changed-password-123",
+        "Changed123",
     )
     assert response.status_code == 200
     other_client, response = _login(
         app,
         username,
-        "Changed-password-123",
+        "Changed123",
     )
     assert response.status_code == 200
 
@@ -397,8 +397,8 @@ def test_logout_preserves_other_sessions_until_password_change(auth_system):
     changed = remaining_client.post(
         "/auth/password",
         json={
-            "current_password": "Changed-password-123",
-            "new_password": "Final-password-123",
+            "current_password": "Changed123",
+            "new_password": "FinalPass123",
         },
     )
     assert changed.status_code == 204
@@ -410,7 +410,7 @@ def test_logout_preserves_other_sessions_until_password_change(auth_system):
     replacement, response = _login(
         app,
         username,
-        "Final-password-123",
+        "FinalPass123",
     )
     assert response.status_code == 200
     assert replacement.get(
@@ -434,7 +434,7 @@ def test_admin_user_management_and_last_admin_protection(auth_system):
     created = _create_user(
         client,
         "analyst@example.test",
-        "Initial-password-123",
+        "Initial123",
         "VIEWER",
     )
     assert created["password_change_required"]
@@ -463,21 +463,21 @@ def test_admin_user_management_and_last_admin_protection(auth_system):
     assert activated.status_code == 200
     reset = client.post(
         f"/users/{created['user_id']}/password-reset",
-        json={"password": "Reset-password-123"},
+        json={"password": "Reset123"},
     )
     assert reset.status_code == 204
     reset_client, reset_login = _login(
         app,
         "analyst@example.test",
-        "Reset-password-123",
+        "Reset123",
     )
     assert reset_login.status_code == 200
     assert reset_client.get("/users").status_code == 403
     assert reset_client.post(
         "/auth/password",
         json={
-            "current_password": "Reset-password-123",
-            "new_password": "Post-reset-password-123",
+            "current_password": "Reset123",
+            "new_password": "PostReset123",
         },
     ).status_code == 204
     assert client.patch(
@@ -493,7 +493,7 @@ def test_investigator_assigned_access_and_cross_case_isolation(auth_system):
     investigator = _create_user(
         admin_client,
         "investigator@example.test",
-        "Investigator-password-123",
+        "Invest123",
         "INVESTIGATOR",
     )
     assignment = admin_client.post(
@@ -516,21 +516,21 @@ def test_investigator_assigned_access_and_cross_case_isolation(auth_system):
     investigator_client, login_response = _login(
         app,
         "investigator@example.test",
-        "Investigator-password-123",
+        "Invest123",
     )
     assert login_response.status_code == 200
     changed = investigator_client.post(
         "/auth/password",
         json={
-            "current_password": "Investigator-password-123",
-            "new_password": "Changed-password-123",
+            "current_password": "Invest123",
+            "new_password": "Changed123",
         },
     )
     assert changed.status_code == 204
     investigator_client, login_response = _login(
         app,
         "investigator@example.test",
-        "Changed-password-123",
+        "Changed123",
     )
     assert login_response.status_code == 200
 
@@ -593,7 +593,7 @@ def test_viewer_is_read_only_and_admin_only_routes_are_denied(auth_system):
     viewer = _create_user(
         admin_client,
         "viewer@example.test",
-        "Viewer-password-123",
+        "Viewer123",
         "VIEWER",
     )
     assert admin_client.post(
@@ -603,20 +603,20 @@ def test_viewer_is_read_only_and_admin_only_routes_are_denied(auth_system):
     viewer_client, response = _login(
         app,
         "viewer@example.test",
-        "Viewer-password-123",
+        "Viewer123",
     )
     assert response.status_code == 200
     viewer_client.post(
         "/auth/password",
         json={
-            "current_password": "Viewer-password-123",
-            "new_password": "Viewer-updated-password-123",
+            "current_password": "Viewer123",
+            "new_password": "ViewUp123",
         },
     )
     viewer_client, response = _login(
         app,
         "viewer@example.test",
-        "Viewer-updated-password-123",
+        "ViewUp123",
     )
     assert response.status_code == 200
     assert viewer_client.get(
@@ -649,13 +649,13 @@ def test_lead_can_manage_memberships_only_for_assigned_cases(auth_system):
     lead = _create_user(
         admin_client,
         "lead@example.test",
-        "Lead-password-123",
+        "LeadPass123",
         "LEAD_INVESTIGATOR",
     )
     investigator = _create_user(
         admin_client,
         "lead-assignee@example.test",
-        "Assignee-password-123",
+        "Assign123",
         "INVESTIGATOR",
     )
     assert admin_client.post(
@@ -666,20 +666,20 @@ def test_lead_can_manage_memberships_only_for_assigned_cases(auth_system):
     lead_client, response = _login(
         app,
         "lead@example.test",
-        "Lead-password-123",
+        "LeadPass123",
     )
     assert response.status_code == 200
     assert lead_client.post(
         "/auth/password",
         json={
-            "current_password": "Lead-password-123",
-            "new_password": "Lead-updated-password-123",
+            "current_password": "LeadPass123",
+            "new_password": "LeadUp123",
         },
     ).status_code == 204
     lead_client, response = _login(
         app,
         "lead@example.test",
-        "Lead-updated-password-123",
+        "LeadUp123",
     )
     assert response.status_code == 200
     assert lead_client.patch(
@@ -813,13 +813,13 @@ def test_simulator_authorization_for_assigned_investigator_and_viewer(auth_syste
     investigator = _create_user(
         admin_client,
         "simulator-user@example.test",
-        "Simulator-password-123",
+        "SimPass123",
         "INVESTIGATOR",
     )
     viewer = _create_user(
         admin_client,
         "simulator-viewer@example.test",
-        "Viewer-password-123",
+        "Viewer123",
         "VIEWER",
     )
     for user in (investigator, viewer):
@@ -831,20 +831,20 @@ def test_simulator_authorization_for_assigned_investigator_and_viewer(auth_syste
     investigator_client, login_response = _login(
         app,
         "simulator-user@example.test",
-        "Simulator-password-123",
+        "SimPass123",
     )
     assert login_response.status_code == 200
     investigator_client.post(
         "/auth/password",
         json={
-            "current_password": "Simulator-password-123",
-            "new_password": "Simulator-updated-password-123",
+            "current_password": "SimPass123",
+            "new_password": "SimUp123",
         },
     )
     investigator_client, login_response = _login(
         app,
         "simulator-user@example.test",
-        "Simulator-updated-password-123",
+        "SimUp123",
     )
     scenario = investigator_client.post(
         "/api/simulations",
@@ -903,20 +903,20 @@ def test_simulator_authorization_for_assigned_investigator_and_viewer(auth_syste
     viewer_client, login_response = _login(
         app,
         "simulator-viewer@example.test",
-        "Viewer-password-123",
+        "Viewer123",
     )
     assert login_response.status_code == 200
     viewer_client.post(
         "/auth/password",
         json={
-            "current_password": "Viewer-password-123",
-            "new_password": "Viewer-simulator-password-123",
+            "current_password": "Viewer123",
+            "new_password": "ViewSim123",
         },
     )
     viewer_client, login_response = _login(
         app,
         "simulator-viewer@example.test",
-        "Viewer-simulator-password-123",
+        "ViewSim123",
     )
     assert viewer_client.get(
         f"/api/simulations/{scenario_id}"

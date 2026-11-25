@@ -26,7 +26,7 @@ Role = Literal[
     "INVESTIGATOR",
     "VIEWER",
 ]
-_DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(32))
+_DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(9))
 
 router = APIRouter(tags=["Authentication and access management"])
 
@@ -38,7 +38,7 @@ class LoginRequest(BaseModel):
 
 class CreateUserRequest(BaseModel):
     username: str = Field(min_length=1, max_length=320)
-    password: str = Field(min_length=12, max_length=256)
+    password: str = Field(min_length=8, max_length=15)
     role: Role
 
 
@@ -48,12 +48,12 @@ class UpdateUserRequest(BaseModel):
 
 
 class PasswordRequest(BaseModel):
-    password: str = Field(min_length=12, max_length=256)
+    password: str = Field(min_length=8, max_length=15)
 
 
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(min_length=1, max_length=1024)
-    new_password: str = Field(min_length=12, max_length=256)
+    new_password: str = Field(min_length=8, max_length=15)
 
 
 class AssignmentRequest(BaseModel):

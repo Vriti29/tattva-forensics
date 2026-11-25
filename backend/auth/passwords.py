@@ -6,8 +6,8 @@ _PASSWORD_HASHER = PasswordHasher(type=Type.ID)
 
 
 def hash_password(password):
-    if not isinstance(password, str) or not 12 <= len(password) <= 256:
-        raise ValueError("Password must contain 12 to 256 characters")
+    if not isinstance(password, str) or not 8 <= len(password) <= 256:
+        raise ValueError("Password must contain 8 to 256 characters")
     return _PASSWORD_HASHER.hash(password)
 
 

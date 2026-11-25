@@ -102,8 +102,8 @@ export function RequiredPasswordChangePage({ username, onSubmit, onLogout }) {
       setError("The new passwords do not match.");
       return;
     }
-    if (newPassword.length < 12 || newPassword.length > 256) {
-      setError("The new password must contain 12 to 256 characters.");
+    if (newPassword.length < 8 || newPassword.length > 15) {
+      setError("The new password must contain 8 to 15 characters.");
       return;
     }
 
@@ -125,7 +125,7 @@ export function RequiredPasswordChangePage({ username, onSubmit, onLogout }) {
         <h1>Change your password</h1>
         <p className="auth-description">
           {username} must choose a new password before accessing assigned cases.
-          Use 12 to 256 characters. Changing it signs out all active sessions.
+          Use 8 to 15 characters. Changing it signs out all active sessions.
         </p>
 
         {error && (
