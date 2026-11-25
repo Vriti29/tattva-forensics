@@ -21,6 +21,7 @@ import {
   setCsrfToken,
 } from "./investigationApi.js";
 import "./App.css";
+import { LandingPage } from "./LandingPage.jsx";
 
 const menuItems = [
   { label: "Dashboard", icon: "▦" },
@@ -226,6 +227,7 @@ function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [evidenceInputKey, setEvidenceInputKey] = useState(0);
   const [sourceType, setSourceType] = useState("authentication");
+  const [showLanding, setShowLanding] = useState(true);
   const [investigationId, setInvestigationId] = useState(() => {
     try {
       return window.localStorage.getItem("tattva:selected-investigation") || "";
@@ -1014,6 +1016,10 @@ function App() {
     return <AuthLoadingPage />;
   }
   if (!currentUser) {
+    if (showLanding) {
+      return <LandingPage onSignIn={() => setShowLanding(false)} />;
+    }
+
     return (
       <LoginPage
         onLogin={handleLogin}
@@ -1112,15 +1118,15 @@ function App() {
       </header>
 
       <main className="main-content">
-        <header className="topbar">
-          <div className="topbar-title">
+        <header className={`topbar ${(effectivePage === "Reports" || effectivePage === "What-If Simulator") ? "reports-topbar" : ""}`}>
+          <div className={`topbar-title ${(effectivePage === "Reports" || effectivePage === "What-If Simulator") ? "reports-topbar-title" : ""}`}>
             {investigation &&
               effectivePage !== "Investigations" &&
               effectivePage !== "Dashboard" && (
               <div
                 className={`selected-investigation-context ${
                   effectivePage === "Dashboard" ? "dashboard-context" : ""
-                }`}
+                } ${(effectivePage === "Reports" || effectivePage === "What-If Simulator") ? "reports-investigation-context" : ""}`}
               >
                 <span className="eyebrow">
                   {effectivePage === "Dashboard"
@@ -1132,6 +1138,12 @@ function App() {
               </div>
             )}
             <h1>{effectivePage}</h1>
+            {effectivePage === "Reports" && (
+              <p className="reports-page-intro">
+                Explore the investigation through digital evidence, detection findings,
+                anomaly insights and potential connections between records.
+              </p>
+            )}
           </div>
           <div className="topbar-actions">
             {effectivePage !== "Investigations" &&
@@ -2378,6 +2390,7 @@ function App() {
                     </p>
                   </div>
                 )}
+              </aside>
 
               <div className="graph-legend">
                 {selectedEvidence && (
@@ -2445,470 +2458,431 @@ function App() {
 
                   <p>Total Relationships: {graphData.edges.length}</p>
                 </div>
-              </aside>
-            </div>
-          </section>
-        ) : effectivePage === "What-If Simulator" ? (
-          <section className="simulator-page">
-            <p className="simulator-description">
-              Test how excluding one evidence record changes the analysis.
-              Original evidence and the baseline remain unchanged.
-            </p>
-
-            {workspaceError && (
-              <p className="forensic-message forensic-error" role="alert">
-                {workspaceError}
-              </p>
-            )}
-            {simulationError && (
-              <p className="forensic-message forensic-error" role="alert">
-                {simulationError}
-              </p>
-            )}
-
-            <section className="simulator-configuration">
-              <div className="simple-section-heading">
-                <h2>Scenario setup</h2>
-                <p>Choose an evidence record to exclude from a new scenario.</p>
               </div>
-              {!analysisResult?.baseline_analysis_id ||
-              evidenceRecords.length === 0 ? (
-                <div className="simple-empty-state">
-                  <p>
-                    A baseline analysis and at least one evidence record are
-                    required before a simulation can run.
-                  </p>
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() => setActivePage("Evidence Explorer")}
-                  >
-                    Open Evidence Explorer
-                  </button>
+            </section>
+
+) : effectivePage === "What-If Simulator" ? (
+  <section className="simulator-page">
+    <p className="simulator-description">
+      Test how excluding one evidence record changes the analysis.
+      Original evidence and the baseline remain unchanged.
+    </p>
+
+    {workspaceError && (
+      <p className="forensic-message forensic-error" role="alert">
+        {workspaceError}
+      </p>
+    )}
+
+    {simulationError && (
+      <p className="forensic-message forensic-error" role="alert">
+        {simulationError}
+      </p>
+    )}
+
+    <section className="simulator-configuration">
+      <div className="simple-section-heading">
+        <h2>Scenario Setup</h2>
+        <p>Choose an evidence record to exclude from a new scenario.</p>
+      </div>
+
+      {!analysisResult?.baseline_analysis_id ||
+      evidenceRecords.length === 0 ? (
+        <div className="simple-empty-state">
+          <p>
+            A baseline analysis and at least one evidence record are
+            required before a simulation can run.
+          </p>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => setActivePage("Evidence Explorer")}
+          >
+            Open Evidence Explorer
+          </button>
+        </div>
+      ) : (
+        <div className="simulator-form">
+          <label>
+            Scenario Name
+            <input
+              type="text"
+              value={scenarioName}
+              required
+              maxLength={200}
+              onChange={(event) => {
+                setScenarioName(event.target.value);
+                setSimulationError("");
+                setSimulationResult(null);
+                setSimulationComparison(null);
+                setScenarioId(null);
+                setAuditHistory([]);
+              }}
+            />
+          </label>
+
+          <label>
+            Evidence Record to Exclude
+            <select
+              value={selectedEvidenceId}
+              onChange={(event) => {
+                setSelectedEvidenceId(event.target.value);
+                setSimulationError("");
+                setSimulationResult(null);
+                setSimulationComparison(null);
+                setScenarioId(null);
+                setAuditHistory([]);
+              }}
+              required
+            >
+              <option value="">Select a record</option>
+              {evidenceRecords.map((record) => (
+                <option
+                  key={record.evidence_id}
+                  value={record.evidence_id}
+                >
+                  {formatEvidenceId(record.evidence_id)} —{" "}
+                  {record.event_type || record.original_event_type} (
+                  {record.source_type})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            className="primary-button"
+            type="button"
+            onClick={handleRunSimulation}
+            disabled={
+              simulationLoading ||
+              !selectedEvidenceId ||
+              !scenarioName.trim()
+            }
+          >
+            {simulationLoading ? "Running Simulation..." : "Run Simulation"}
+          </button>
+        </div>
+      )}
+
+      {simulationLoading && (
+        <p className="simulator-loading" role="status">
+          Running scenario and comparing it with the baseline...
+        </p>
+      )}
+    </section>
+
+    <section className="simulator-results">
+      <div className="simple-section-heading">
+        <h2>Simulation Results</h2>
+        <p>Results are shown after the backend completes a run.</p>
+      </div>
+
+      {simulationResult ? (
+        <>
+          <div className="simulation-result-heading">
+            <div>
+              <strong>{scenarioName || "Scenario Result"}</strong>
+              <span>Scenario ID: {scenarioId || "Not returned"}</span>
+            </div>
+            <span className="simulation-status">
+              {simulationResult.status || "Status not returned"}
+            </span>
+          </div>
+
+          <div className="simulation-result-columns">
+            <section className="simulation-result-section">
+              <h3>Findings</h3>
+
+              {simulationResult.findings?.length ? (
+                <div className="simulation-finding-list">
+                  {simulationResult.findings.map((finding) => (
+                    <article
+                      className="simulation-finding-card"
+                      key={finding.finding_id}
+                    >
+                      <div className="simulation-item-heading">
+                        <strong>{finding.title}</strong>
+                        {finding.severity && (
+                          <span
+                            className={`simulation-severity ${String(
+                              finding.severity
+                            ).toLowerCase()}`}
+                          >
+                            {finding.severity}
+                          </span>
+                        )}
+                      </div>
+
+                      <p>{finding.description}</p>
+
+                      <small>
+                        {finding.finding_id}
+                        {finding.evidence_ids?.length
+                          ? ` · Evidence: ${finding.evidence_ids.join(", ")}`
+                          : ""}
+                      </small>
+                    </article>
+                  ))}
                 </div>
               ) : (
-                <div className="simulator-form">
-                  <label>
-                    Scenario name
-                    <input
-                      type="text"
-                      value={scenarioName}
-                      required
-                      maxLength={200}
-                      onChange={(event) => {
-                        setScenarioName(event.target.value);
-                        setSimulationError("");
-                        setSimulationResult(null);
-                        setSimulationComparison(null);
-                        setScenarioId(null);
-                        setAuditHistory([]);
-                      }}
-                    />
-                  </label>
-                  <label>
-                    Evidence record to exclude
-                    <select
-                      value={selectedEvidenceId}
-                      onChange={(event) => {
-                        setSelectedEvidenceId(event.target.value);
-                        setSimulationError("");
-                        setSimulationResult(null);
-                        setSimulationComparison(null);
-                        setScenarioId(null);
-                        setAuditHistory([]);
-                      }}
-                      required
-                    >
-                      <option value="">Select a record</option>
-                      {evidenceRecords.map((record) => (
-                        <option
-                          key={record.evidence_id}
-                          value={record.evidence_id}
-                        >
-                          {record.evidence_id} ·{" "}
-                          {record.event_type || record.original_event_type} ·{" "}
-                          {getEvidenceSourceLabel(record.source_type)}
-                          {getFileForRecord(record)?.filename
-                            ? ` · ${getFileForRecord(record).filename}`
-                            : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <div style={{ marginTop: "24px" }}>
-                    <button
-                      className="primary-button"
-                      type="button"
-                      onClick={handleRunSimulation}
-                      disabled={
-                        simulationLoading ||
-                        !selectedEvidenceId ||
-                        !scenarioName.trim()
-                      }
-                    >
-                      {simulationLoading
-                        ? "Running simulation..."
-                        : "Run simulation"}
-                    </button>
-                  </div>
-                </div>
-              )}
-              {simulationLoading && (
-                <p className="simulator-loading" role="status">
-                  Running scenario and comparing it with the baseline...
+                <p className="simulator-result-empty">
+                  No findings were returned for this scenario.
                 </p>
               )}
             </section>
 
-            <section className="simulator-results">
-              <div className="simple-section-heading">
-                <h2>Simulation results</h2>
-                <p>Results are shown after the backend completes a run.</p>
-              </div>
-              {simulationResult ? (
+            <section className="simulation-result-section">
+              <h3>Relationships</h3>
+
+              {simulationResult.relationships?.length ? (
                 <>
-                  <div className="simulation-result-heading">
-                    <div>
-                      <strong>{scenarioName || "Scenario result"}</strong>
-                      <span>Scenario ID: {scenarioId || "Not returned"}</span>
-                    </div>
-                    <span className="simulation-status">
-                      {simulationResult.status || "Status not returned"}
-                    </span>
+                  <div className="simulation-relationship-list">
+                    {simulationResult.relationships
+                      .slice(0, 4)
+                      .map((relationship, index) => (
+                        <details
+                          className="simulation-relationship-card"
+                          key={`${relationship.source_evidence_id || ""}-${
+                            relationship.target_evidence_id || ""
+                          }-${index}`}
+                        >
+                          <summary>
+                            <strong>
+                              {relationship.relationship_type ||
+                                "Type unavailable"}
+                            </strong>
+                            <span>
+                              {relationship.source_evidence_id ||
+                                "Source unavailable"}
+                              {" → "}
+                              {relationship.target_evidence_id ||
+                                "Target unavailable"}
+                            </span>
+                          </summary>
+
+                          <div className="relationship-detail">
+                            <p>
+                              {relationship.description ||
+                                "No additional description available."}
+                            </p>
+                            <span>
+                              Score:{" "}
+                              {relationship.relationship_score ?? "Not available"}
+                            </span>
+                          </div>
+                        </details>
+                      ))}
                   </div>
 
-                  <div className="simulation-result-columns">
-                    <section className="simulation-result-section">
-                      <h3>Findings</h3>
-                      {simulationResult.findings?.length ? (
-                        <ul className="simulation-finding-list">
-                          {simulationResult.findings.map((finding) => (
-                            <li key={finding.finding_id}>
-                              <div>
-                                <strong>{finding.title}</strong>
-                                {finding.severity && (
-                                  <span
-                                    className={`simulation-severity ${String(
-                                      finding.severity
-                                    ).toLowerCase()}`}
-                                  >
-                                    {finding.severity}
-                                  </span>
-                                )}
-                              </div>
-                              <p>{finding.description}</p>
-                              <small>
-                                {finding.finding_id}
-                                {finding.evidence_ids?.length
-                                  ? ` · Evidence: ${finding.evidence_ids.join(
-                                      ", "
-                                    )}`
-                                  : ""}
-                              </small>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="simulator-result-empty">
-                          No findings were returned for this scenario.
-                        </p>
-                      )}
-                    </section>
+                  {simulationResult.relationships.length > 4 && (
+                    <details className="simulation-more-relationships">
+                      <summary>
+                        View remaining{" "}
+                        {simulationResult.relationships.length - 4}{" "}
+                        relationships
+                      </summary>
 
-                    <section className="simulation-result-section">
-                      <h3>Relationships</h3>
-                      {simulationResult.relationships?.length ? (
-                        <ul className="simulation-relationship-list">
-                          {simulationResult.relationships.map(
-                            (relationship, index) => (
-                              <li
-                                key={`${relationship.source_evidence_id || ""}-${
-                                  relationship.target_evidence_id || ""
-                                }-${index}`}
-                              >
+                      <div className="simulation-relationship-list">
+                        {simulationResult.relationships
+                          .slice(4)
+                          .map((relationship, index) => (
+                            <details
+                              className="simulation-relationship-card"
+                              key={`${relationship.source_evidence_id || ""}-${
+                                relationship.target_evidence_id || ""
+                              }-${index + 4}`}
+                            >
+                              <summary>
                                 <strong>
                                   {relationship.relationship_type ||
                                     "Type unavailable"}
                                 </strong>
                                 <span>
-                                  {relationship.source_evidence_id || "Source unavailable"}
+                                  {relationship.source_evidence_id ||
+                                    "Source unavailable"}
                                   {" → "}
-                                  {relationship.target_evidence_id || "Target unavailable"}
+                                  {relationship.target_evidence_id ||
+                                    "Target unavailable"}
                                 </span>
-                                {relationship.description && (
-                                  <p>{relationship.description}</p>
-                                )}
-                                {relationship.relationship_score != null && (
-                                  <small>
-                                    Score: {relationship.relationship_score}
-                                  </small>
-                                )}
-                              </li>
-                            )
-                          )}
-                        </ul>
-                      ) : (
-                        <p className="simulator-result-empty">
-                          No relationships were returned for this scenario.
-                        </p>
-                      )}
-                    </section>
-                  </div>
+                              </summary>
+
+                              <div className="relationship-detail">
+                                <p>
+                                  {relationship.description ||
+                                    "No additional description available."}
+                                </p>
+                                <span>
+                                  Score:{" "}
+                                  {relationship.relationship_score ??
+                                    "Not available"}
+                                </span>
+                              </div>
+                            </details>
+                          ))}
+                      </div>
+                    </details>
+                  )}
                 </>
               ) : (
                 <p className="simulator-result-empty">
-                  Configure a scenario and run it to see findings and
-                  relationships here.
+                  No relationships were returned for this scenario.
                 </p>
               )}
-
-              {simulationComparison && (
-                <section className="simulation-comparison">
-                  <h3>Compared with baseline</h3>
-                  <dl>
-                    {[
-                      [
-                        "Unchanged relationships",
-                        simulationComparison.comparison
-                          ?.unchanged_relationships,
-                      ],
-                      [
-                        "Removed relationships",
-                        simulationComparison.comparison
-                          ?.removed_relationships,
-                      ],
-                      [
-                        "Added relationships",
-                        simulationComparison.comparison?.added_relationships,
-                      ],
-                      [
-                        "Unchanged findings",
-                        simulationComparison.finding_details?.unchanged,
-                      ],
-                      [
-                        "Removed findings",
-                        simulationComparison.finding_details?.removed,
-                      ],
-                      [
-                        "Added findings",
-                        simulationComparison.finding_details?.added,
-                      ],
-                      [
-                        "Removed graph nodes",
-                        simulationComparison.graph_details?.removed_nodes,
-                      ],
-                    ].map(([label, entries]) => (
-                      <div key={label}>
-                        <dt>{label}</dt>
-                        <dd>
-                          {Array.isArray(entries)
-                            ? entries.length
-                            : "Not returned"}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                  <p>
-                    This is a hypothetical analysis. Original evidence and
-                    baseline analysis are unchanged.
-                  </p>
-                </section>
-              )}
-
-              {auditHistory.length > 0 && (
-                <section className="simulation-audit">
-                  <h3>Simulation audit history</h3>
-                  {auditHistory.map((entry, index) => {
-                    const action = String(
-                      entry.action || entry.event_type || ""
-                    ).toUpperCase();
-
-                    const activityDetails = {
-                      SCENARIO_CREATED: {
-                        title: "Simulation Scenario Created",
-                        description:
-                          "A new hypothetical investigation scenario was created. The original evidence and baseline analysis remain unchanged.",
-                        icon: "🧪",
-                        color: "#287bd1",
-                      },
-                      EVENT_EXCLUDED: {
-                        title: "Evidence Excluded",
-                        description:
-                          "An evidence record was excluded from this hypothetical scenario to evaluate how its removal affects the investigation.",
-                        icon: "📁",
-                        color: "#d97706",
-                      },
-                      SIMULATION_EXECUTED: {
-                        title: "Simulation Executed",
-                        description:
-                          "The forensic analysis was re-evaluated using the modified evidence set.",
-                        icon: "⚙️",
-                        color: "#7c3aed",
-                      },
-                      COMPARISON_GENERATED: {
-                        title: "Baseline Comparison Generated",
-                        description:
-                          "The simulated results were compared with the original baseline to identify changes in findings and relationships.",
-                        icon: "📊",
-                        color: "#0f9d78",
-                      },
-                    };
-
-                    const activity = activityDetails[action] || {
-                      title: action
-                        ? action.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase())
-                        : `Investigation Activity ${index + 1}`,
-                      description:
-                        "An investigation activity was recorded in the audit trail.",
-                      icon: "📋",
-                      color: "#64748b",
-                    };
-
-                    const timestamp = entry.timestamp || entry.created_at;
-
-                    return (
-                      <article
-                        key={entry.audit_id || index}
-                        style={{
-                          background: "#ffffff",
-                          border: "1px solid #e2e8f0",
-                          borderLeft: `4px solid ${activity.color}`,
-                          borderRadius: "12px",
-                          padding: "20px",
-                          marginTop: "14px",
-                          boxShadow: "0 3px 12px rgba(15, 23, 42, 0.04)",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "12px",
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: "42px",
-                              height: "42px",
-                              borderRadius: "10px",
-                              background: "#f1f5f9",
-                              display: "grid",
-                              placeItems: "center",
-                              fontSize: "21px",
-                              flexShrink: 0,
-                            }}
-                          >
-                            {activity.icon}
-                          </div>
-
-                          <div style={{ flex: 1 }}>
-                            <strong style={{ color: "#17365f", fontSize: "15px" }}>
-                              {activity.title}
-                            </strong>
-
-                            <p
-                              style={{
-                                margin: "5px 0 0",
-                                color: "#64748b",
-                                fontSize: "12px",
-                              }}
-                            >
-                              {timestamp
-                                ? new Date(timestamp).toLocaleString()
-                                : "Timestamp unavailable"}
-                            </p>
-                          </div>
-
-                          <span
-                            style={{
-                              background: "#f1f5f9",
-                              color: activity.color,
-                              padding: "5px 10px",
-                              borderRadius: "20px",
-                              fontSize: "11px",
-                              fontWeight: 700,
-                            }}
-                          >
-                            RECORDED
-                          </span>
-                        </div>
-
-                        <p
-                          style={{
-                            color: "#475569",
-                            lineHeight: 1.6,
-                            margin: "16px 0",
-                            fontSize: "13px",
-                          }}
-                        >
-                          {activity.description}
-                        </p>
-
-                        <div
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: "18px",
-                            fontSize: "12px",
-                            color: "#64748b",
-                          }}
-                        >
-                          {entry.evidence_id && (
-                            <span>
-                              <strong>Evidence:</strong> {entry.evidence_id}
-                            </span>
-                          )}
-
-                          {entry.scenario_id && (
-                            <span>
-                              <strong>Scenario:</strong> {entry.scenario_id}
-                            </span>
-                          )}
-
-                          {entry.audit_id && (
-                            <span>
-                              <strong>Audit ID:</strong> {entry.audit_id}
-                            </span>
-                          )}
-                        </div>
-
-                        <details style={{ marginTop: "16px" }}>
-                          <summary
-                            style={{
-                              cursor: "pointer",
-                              color: "#287bd1",
-                              fontSize: "12px",
-                              fontWeight: 600,
-                            }}
-                          >
-                            View Technical Audit Record
-                          </summary>
-
-                          <pre
-                            style={{
-                              whiteSpace: "pre-wrap",
-                              overflowX: "auto",
-                              background: "#f8fafc",
-                              padding: "14px",
-                              borderRadius: "8px",
-                              fontSize: "11px",
-                              color: "#334155",
-                              marginTop: "12px",
-                            }}
-                          >
-                            {JSON.stringify(entry, null, 2)}
-                          </pre>
-                        </details>
-                      </article>
-                    );
-                  })}
-                </section>
-              )}
             </section>
-          </section>
-        ) : effectivePage === "Reports" ? (
-          <section className="report-page">
+          </div>
+        </>
+      ) : (
+        <p className="simulator-result-empty">
+          Configure a scenario and run it to see findings and relationships here.
+        </p>
+      )}
+
+      {false && simulationComparison && (
+        <section className="simulation-comparison">
+          <h3>Compared with Baseline</h3>
+
+          <dl>
+            {[
+              [
+                "Unchanged Relationships",
+                simulationComparison.comparison?.unchanged_relationships,
+              ],
+              [
+                "Removed Relationships",
+                simulationComparison.comparison?.removed_relationships,
+              ],
+              [
+                "Added Relationships",
+                simulationComparison.comparison?.added_relationships,
+              ],
+              [
+                "Unchanged Findings",
+                simulationComparison.finding_details?.unchanged,
+              ],
+              [
+                "Removed Findings",
+                simulationComparison.finding_details?.removed,
+              ],
+              [
+                "Added Findings",
+                simulationComparison.finding_details?.added,
+              ],
+              [
+                "Removed Graph Nodes",
+                simulationComparison.graph_details?.removed_nodes,
+              ],
+            ].map(([label, entries]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>
+                  {Array.isArray(entries)
+                    ? entries.length
+                    : "Not returned"}
+                </dd>
+              </div>
+            ))}
+          </dl>
+
+          <p>
+            This is a hypothetical analysis. Original evidence and
+            baseline analysis are unchanged.
+          </p>
+        </section>
+      )}
+
+      {auditHistory.length > 0 && (
+        <section className="simulation-audit-history">
+          <h3>Simulation Audit History</h3>
+
+          {auditHistory.map((entry, index) => {
+            const action = String(
+              entry.action || entry.event_type || ""
+            ).toUpperCase();
+
+            const activityDetails = {
+              SCENARIO_CREATED: {
+                title: "Simulation Scenario Created",
+                description:
+                  "A new hypothetical investigation scenario was created. Original evidence remains unchanged.",
+              },
+              EVENT_EXCLUDED: {
+                title: "Evidence Excluded",
+                description:
+                  "An evidence record was excluded from this hypothetical scenario.",
+              },
+              SIMULATION_EXECUTED: {
+                title: "Simulation Executed",
+                description:
+                  "The forensic analysis was re-evaluated using the modified evidence set.",
+              },
+              COMPARISON_GENERATED: {
+                title: "Baseline Comparison Generated",
+                description:
+                  "Simulated results were compared with the original baseline.",
+              },
+            };
+
+            const activity = activityDetails[action] || {
+              title: action
+                ? action.replace(/_/g, " ").toLowerCase()
+                : `Investigation Activity ${index + 1}`,
+              description: "An investigation activity was recorded.",
+            };
+
+            const timestamp = entry.timestamp || entry.created_at;
+
+            return (
+              <article
+                className="simulation-audit-card"
+                key={entry.audit_id || index}
+              >
+                <div className="simulation-audit-heading">
+                  <div>
+                    <strong>{activity.title}</strong>
+                    <small>
+                      {timestamp
+                        ? new Date(timestamp).toLocaleString()
+                        : "Timestamp unavailable"}
+                    </small>
+                  </div>
+                  <span>RECORDED</span>
+                </div>
+
+                <p>{activity.description}</p>
+
+                <div className="simulation-audit-meta">
+                  {entry.evidence_id && (
+                    <span>
+                      Evidence: {entry.evidence_id}
+                    </span>
+                  )}
+                  {entry.scenario_id && (
+                    <span>
+                      Scenario: {entry.scenario_id}
+                    </span>
+                  )}
+                  {entry.audit_id && (
+                    <span>
+                      Audit ID: {entry.audit_id}
+                    </span>
+                  )}
+                </div>
+
+                <details>
+                  <summary>View Technical Audit Record</summary>
+                  <pre>
+                    {JSON.stringify(entry, null, 2)}
+                  </pre>
+                </details>
+              </article>
+            );
+          })}
+        </section>
+      )}
+    </section>
+  </section>
+               ) : effectivePage === "Reports" ? (
+          <section className="report-page reports-page">
             <div className="report-header">
               <span className="report-eyebrow">INVESTIGATION REPORTS</span>
               <h2 className="report-title">Forensic Analysis Report</h2>
@@ -2934,19 +2908,19 @@ function App() {
                     {
                       label: "Investigation ID",
                       value: investigationId || "N/A",
-                      icon: "🔎",
+                      
                       description: "Active investigation",
                     },
                     {
                       label: "Total Evidence",
                       value: evidenceRecords.length,
-                      icon: "📁",
+                      
                       description: "Evidence files analyzed",
                     },
                     {
                       label: "Total Findings",
                       value: analysisResult.detection?.total_findings ?? 0,
-                      icon: "⚠️",
+                      
                       description: "Detection findings",
                     },
                     {
@@ -2954,7 +2928,7 @@ function App() {
                       value:
                         analysisResult.correlation?.total_relationships ??
                         analysisResult.correlation?.relationships?.length ?? 0,
-                      icon: "🔗",
+                      
                       description: "Potential evidence links",
                     },
                   ].map((item) => (
