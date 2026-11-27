@@ -131,7 +131,7 @@ def set_csrf_cookie(response, request, csrf_token):
         csrf_token,
         httponly=True,
         secure=_cookie_is_secure(request),
-        samesite="strict",
+        samesite="none",
         path="/",
     )
 
@@ -142,7 +142,7 @@ def set_session_cookie(response, request, token, max_age):
         token,
         httponly=True,
         secure=_cookie_is_secure(request),
-        samesite="lax",
+        samesite="none",
         path="/",
         max_age=max_age,
     )
@@ -155,14 +155,14 @@ def clear_auth_cookies(response, request):
         path="/",
         secure=secure,
         httponly=True,
-        samesite="lax",
+        samesite="none",
     )
     response.delete_cookie(
         CSRF_COOKIE_NAME,
         path="/",
         secure=secure,
         httponly=True,
-        samesite="strict",
+        samesite="none",
     )
 
 
