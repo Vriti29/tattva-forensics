@@ -256,7 +256,7 @@ export function RequiredPasswordChangePage({ username, onSubmit, onLogout }) {
   };
 
   return (
-    <main className="auth-page">
+    <main className="auth-page authenticated-page">
       <AuthBrand />
       <section className="auth-panel auth-panel-compact">
         <div className="brand-logo auth-logo">TF</div>
