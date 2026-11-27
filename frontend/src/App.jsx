@@ -52,7 +52,6 @@ const evidenceSourceLabels = {
 };
 
 const fingerprintBackgroundPages = new Set([
-  "Dashboard",
   "Evidence Explorer",
   "Incident Timeline",
 ]);

@@ -1,19 +1,12 @@
 
-@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap');
-* {
+.app-container,
+.app-container * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-body {
-  font-family: 'Comic Neue';
-  font-size: 40px;
-  background: #f3f5fa;
-  color: #172b4d;
-}
-
-button {
+.app-container button {
   font-family: inherit;
   cursor: pointer;
 }
@@ -46,7 +39,7 @@ button {
   flex: 0 0 auto;
 }
 
-.brand-logo {
+.app-navigation .brand-logo {
   width: 42px;
   height: 42px;
   background: linear-gradient(135deg, #ff8738, #f46636 52%, #388ff0 53%);
@@ -8528,7 +8521,7 @@ button {
   }
 }
 
-.app-container .topbar h1,
+.app-container:not(.dashboard-shell) .topbar h1,
 .app-container.investigations-shell .investigations-page-heading h2,
 .app-container.reference-theme-shell .forensic-page-intro h2 {
   color: var(--tf-text);
@@ -8573,7 +8566,7 @@ button {
 }
 
 @media (max-width: 760px) {
-  .app-container .topbar h1,
+  .app-container:not(.dashboard-shell) .topbar h1,
   .app-container.investigations-shell .investigations-page-heading h2,
   .app-container.reference-theme-shell .forensic-page-intro h2 {
     font-size: 34px;
@@ -12257,7 +12250,6 @@ button {
    RAW BACKGROUND IMAGE — NO ADDED GRADIENTS, TINTS, OR FILTERS
    ========================================================================== */
 
-.app-container.dashboard-shell,
 .app-container.reference-theme-shell,
 .app-container.admin-shell,
 .main-content:has(.reports-page),
