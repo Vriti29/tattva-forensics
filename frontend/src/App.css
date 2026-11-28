@@ -1,21 +1,26 @@
 
-@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap');
-* {
+.app-container,
+.app-container * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-body {
-  font-family: 'Comic Neue';
-  font-size: 40px;
-  background: #f3f5fa;
-  color: #172b4d;
-}
-
-button {
+.app-container button {
   font-family: inherit;
   cursor: pointer;
+}
+
+.app-container,
+.auth-page.authenticated-page {
+  background-color: #171426;
+  background-image:
+    linear-gradient(rgba(23, 20, 38, 0.72), rgba(23, 20, 38, 0.72)),
+    url("/fingerprint-background.png");
+  background-position: center center, center center;
+  background-size: cover, cover;
+  background-repeat: no-repeat, no-repeat;
+  background-attachment: fixed, fixed;
 }
 
 .app-container {
@@ -46,7 +51,7 @@ button {
   flex: 0 0 auto;
 }
 
-.brand-logo {
+.app-navigation .brand-logo {
   width: 42px;
   height: 42px;
   background: linear-gradient(135deg, #ff8738, #f46636 52%, #388ff0 53%);
@@ -502,6 +507,8 @@ button {
     order: 3;
     flex-basis: 100%;
     justify-content: flex-start;
+    flex-wrap: wrap;
+    overflow-x: visible;
   }
 }
 
@@ -526,7 +533,7 @@ button {
   }
 
   .app-navigation-links {
-    margin: 0 -4px;
+    margin: 0;
     padding: 2px 4px 6px;
   }
 
@@ -2563,7 +2570,6 @@ button {
 
 .app-container.dashboard-shell {
   min-height: 100vh;
-  background: var(--color-navy-950);
   color: var(--color-text);
   color-scheme: dark;
 }
@@ -3337,7 +3343,6 @@ button {
 
 .app-container.investigations-shell {
   min-height: 100vh;
-  background: var(--color-navy-950);
   color: var(--color-text);
   color-scheme: dark;
 }
@@ -3983,7 +3988,6 @@ button {
 
 .app-container.forensic-workspace-shell {
   min-height: 100vh;
-  background: var(--color-navy-950);
   color: var(--color-text);
   color-scheme: dark;
 }
@@ -5857,7 +5861,6 @@ button {
 
 .app-container.admin-shell {
   min-height: 100vh;
-  background: var(--color-navy-950);
   color: var(--color-text);
   color-scheme: dark;
 }
@@ -7481,41 +7484,6 @@ button {
   --shadow-elevated: 0 16px 38px rgba(22, 18, 38, 0.24);
   --heading: var(--tf-heading-font);
   color-scheme: dark;
-  background:
-    linear-gradient(rgba(23, 20, 38, 0.12), rgba(23, 20, 38, 0.12)),
-    var(--fingerprint-background-image, none),
-    radial-gradient(
-      ellipse at 84% 3%,
-      rgba(var(--tf-violet-rgb), 0.34),
-      transparent 35rem
-    ),
-    radial-gradient(
-      ellipse at 13% 48%,
-      rgba(90, 82, 126, 0.2),
-      transparent 43rem
-    ),
-    radial-gradient(
-      ellipse at 74% 92%,
-      rgba(var(--tf-sand-rgb), 0.045),
-      transparent 38rem
-    ),
-    linear-gradient(
-      132deg,
-      var(--tf-indigo-deep) 0%,
-      var(--tf-indigo-mid) 42%,
-      var(--tf-indigo-soft) 76%,
-      var(--tf-indigo) 100%
-    );
-  background-size: cover, cover, auto, auto, auto, auto;
-  background-position:
-    center center,
-    center center,
-    84% 3%,
-    13% 48%,
-    74% 92%,
-    center center;
-  background-repeat: no-repeat;
-  background-attachment: scroll, fixed, scroll, scroll, scroll, scroll;
   color: var(--tf-text);
   font-family: var(--tf-body-font);
 }
@@ -7537,14 +7505,16 @@ button {
 }
 
 .dashboard-shell .brand h2,
-.reference-theme-shell .brand h2 {
+.reference-theme-shell .brand h2,
+.investigations-shell .brand h2 {
   color: var(--tf-text);
   font-family: var(--tf-heading-font);
   font-size: 16px;
 }
 
 .dashboard-shell .brand span,
-.reference-theme-shell .brand span {
+.reference-theme-shell .brand span,
+.investigations-shell .brand span {
   color: var(--tf-muted);
   font-size: 10px;
   letter-spacing: 0.55px;
@@ -8520,7 +8490,7 @@ button {
   }
 }
 
-.app-container .topbar h1,
+.app-container:not(.dashboard-shell) .topbar h1,
 .app-container.investigations-shell .investigations-page-heading h2,
 .app-container.reference-theme-shell .forensic-page-intro h2 {
   color: var(--tf-text);
@@ -8565,7 +8535,7 @@ button {
 }
 
 @media (max-width: 760px) {
-  .app-container .topbar h1,
+  .app-container:not(.dashboard-shell) .topbar h1,
   .app-container.investigations-shell .investigations-page-heading h2,
   .app-container.reference-theme-shell .forensic-page-intro h2 {
     font-size: 34px;
@@ -10075,14 +10045,8 @@ button {
    TATTVA FORENSICS — REPORTS FINAL THEME
 ========================================= */
 
-/* Fingerprint background */
+/* Reports page layout */
 .main-content:has(.reports-page) {
-  background:
-    linear-gradient(
-      rgba(5, 10, 30, 0.30),
-      rgba(5, 10, 30, 0.48)
-    ),
-    url("/fingerprint-background.png") center top / cover fixed;
   min-height: 100vh;
 }
 
@@ -10288,17 +10252,6 @@ button {
 /* ==========================================
    TATTVA REPORTS — FINAL LAYOUT & READABILITY
 ========================================== */
-
-/* 1. Full-width report page */
-.main-content:has(.report-page) {
-  background:
-    linear-gradient(
-      rgba(38, 30, 65, .76),
-      rgba(30, 25, 53, .82)
-    ),
-    url("/fingerprint-background.png") center center / cover fixed !important;
-  background-repeat: no-repeat !important;
-}
 
 .report-page {
   width: 100% !important;
@@ -11061,16 +11014,6 @@ button {
    TATTVA FORENSICS — WHAT IF SIMULATOR
 ========================================== */
 
-/* Page background */
-.main-content:has(.simulator-page) {
-  background:
-    linear-gradient(
-      rgba(38, 30, 65, .76),
-      rgba(30, 25, 53, .84)
-    ),
-    url("/fingerprint-background.png") center center / cover fixed !important;
-}
-
 /* Main layout */
 .simulator-page {
   width: 100% !important;
@@ -11616,21 +11559,20 @@ button {
 .investigations-shell .main-content {
   width: min(100%, 1600px) !important;
   max-width: none !important;
-  padding: 30px 32px 45px !important;
-  background:
-    linear-gradient(
-      rgba(37, 29, 64, 0.78),
-      rgba(31, 25, 55, 0.86)
-    ),
-    url("/fingerprint-background.png") center center / cover fixed !important;
+  padding: 35px 40px !important;
   color: #faf8f5 !important;
+}
+
+.investigations-shell .topbar {
+  align-items: flex-start;
+  margin-bottom: 22px;
 }
 
 /* Main page heading */
 .investigations-shell .topbar h1 {
   color: #fff5ef !important;
   font-family: Georgia, "Times New Roman", serif !important;
-  font-size: 40px !important;
+  font-size: clamp(34px, 3.2vw, 40px) !important;
   font-weight: 700 !important;
   margin: 0 !important;
 }
@@ -11872,10 +11814,6 @@ button {
 
 /* Responsive layout */
 @media (max-width: 900px) {
-  .investigations-shell .main-content {
-    padding: 25px 22px 35px !important;
-  }
-
   .investigations-overview {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
@@ -11886,10 +11824,6 @@ button {
 }
 
 @media (max-width: 650px) {
-  .investigations-shell .topbar h1 {
-    font-size: 32px !important;
-  }
-
   .investigations-page-heading h2 {
     font-size: 27px !important;
   }
@@ -12256,26 +12190,6 @@ button {
     grid-template-columns: 1fr !important;
   }
 }
-/* ==========================================================================
-   RAW BACKGROUND IMAGE — NO ADDED GRADIENTS, TINTS, OR FILTERS
-   ========================================================================== */
-
-.app-container.dashboard-shell,
-.app-container.reference-theme-shell,
-.app-container.admin-shell,
-.main-content:has(.reports-page),
-.main-content:has(.report-page),
-.main-content:has(.simulator-page),
-.investigations-shell .main-content {
-  background-image: url("/fingerprint-background.png") !important;
-  background-color: transparent !important;
-  background-size: cover !important;
-  background-position: center center !important;
-  background-repeat: no-repeat !important;
-  background-attachment: fixed !important;
-  filter: none !important;
-}
-
 /* Remove any decorative overlay pseudo-elements on the background */
 .app-container.dashboard-shell::before,
 .app-container.dashboard-shell::after,
@@ -12606,4 +12520,24 @@ button {
   box-shadow: none !important;
   padding: 0 !important;
   min-height: auto !important;
+}
+
+@media (max-width: 760px) {
+  .investigations-shell .main-content {
+    padding: 25px 20px !important;
+  }
+
+  .investigations-shell .topbar h1 {
+    font-size: 30px !important;
+  }
+}
+
+@media (max-width: 500px) {
+  .investigations-shell .main-content {
+    padding: 22px 14px !important;
+  }
+
+  .investigations-shell .topbar h1 {
+    font-size: 28px !important;
+  }
 }

@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminDashboard } from "./AdminDashboard.jsx";
 import tattvaMark from "./assets/tattva-mark.svg";
-import fingerprintBackground from "./assets/fingerprint-background.png";
 import {
   AdministratorDashboard,
   InvestigatorDashboard,
@@ -50,12 +49,6 @@ const evidenceSourceLabels = {
   network: "Network",
   archive: "Archive",
 };
-
-const fingerprintBackgroundPages = new Set([
-  "Dashboard",
-  "Evidence Explorer",
-  "Incident Timeline",
-]);
 
 function getTimestampMillis(timestamp) {
   if (typeof timestamp !== "string" || !timestamp.trim()) {
@@ -171,6 +164,7 @@ function getInitialPage() {
 
 function App() {
   const [activePage, setActivePage] = useState(getInitialPage);
+  const keepDashboardAfterLoginRef = useRef(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [authNotice, setAuthNotice] = useState("");
@@ -357,6 +351,8 @@ function App() {
         `This account is not authorized for ${optionName} sign-in.`
       );
     }
+    keepDashboardAfterLoginRef.current = true;
+    setActivePage("Dashboard");
     setCsrfToken(result.csrf_token);
     setCurrentUser(result.user);
     setAuthError("");
@@ -518,6 +514,7 @@ function App() {
     if (!authReady || !currentUser || currentUser.password_change_required) {
       return;
     }
+    const keepDashboardOn404 = keepDashboardAfterLoginRef.current;
     if (investigationId) {
       try {
         window.localStorage.setItem(
@@ -533,14 +530,20 @@ function App() {
         .catch((error) => {
           if (error.status === 404) {
             setInvestigationId("");
-            setActivePage("Investigations");
+            if (!keepDashboardOn404) {
+              setActivePage("Investigations");
+            }
             setWorkspaceError("");
             setWorkspaceNotice("");
             return;
           }
           setWorkspaceError(error.message);
+        })
+        .finally(() => {
+          keepDashboardAfterLoginRef.current = false;
         });
     } else {
+      keepDashboardAfterLoginRef.current = false;
       try {
         window.localStorage.removeItem("tattva:selected-investigation");
       } catch {
@@ -1000,13 +1003,6 @@ function App() {
 
   return (
     <div
-      style={
-        fingerprintBackgroundPages.has(effectivePage)
-          ? {
-              "--fingerprint-background-image": `url("${fingerprintBackground}")`,
-            }
-          : undefined
-      }
       className={`app-container ${
         effectivePage === "Dashboard"
           ? "dashboard-shell"
