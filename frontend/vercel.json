@@ -1,0 +1,36 @@
+{
+  "rewrites": [
+    {
+      "source": "/auth",
+      "destination": "https://tattva-forensics-backend.onrender.com/auth"
+    },
+    {
+      "source": "/auth/:path*",
+      "destination": "https://tattva-forensics-backend.onrender.com/auth/:path*"
+    },
+    {
+      "source": "/users",
+      "destination": "https://tattva-forensics-backend.onrender.com/users"
+    },
+    {
+      "source": "/users/:path*",
+      "destination": "https://tattva-forensics-backend.onrender.com/users/:path*"
+    },
+    {
+      "source": "/investigations",
+      "destination": "https://tattva-forensics-backend.onrender.com/investigations"
+    },
+    {
+      "source": "/investigations/:path*",
+      "destination": "https://tattva-forensics-backend.onrender.com/investigations/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://tattva-forensics-backend.onrender.com/api/:path*"
+    },
+    {
+      "source": "/analyze/:path*",
+      "destination": "https://tattva-forensics-backend.onrender.com/analyze/:path*"
+    }
+  ]
+}

@@ -24,9 +24,7 @@ def _session_time(value):
 
 
 def _cookie_is_secure(request):
-    if getattr(request.app.state, "environment", "production") != "development":
-        return True
-    return (request.url.hostname or "").lower() not in _LOCAL_HOSTS
+    return request.app.state.environment == "production"
 
 
 def get_current_user(request: Request):
@@ -133,7 +131,7 @@ def set_csrf_cookie(response, request, csrf_token):
         csrf_token,
         httponly=True,
         secure=_cookie_is_secure(request),
-        samesite="strict",
+        samesite="none",
         path="/",
     )
 
@@ -144,7 +142,7 @@ def set_session_cookie(response, request, token, max_age):
         token,
         httponly=True,
         secure=_cookie_is_secure(request),
-        samesite="lax",
+        samesite="none",
         path="/",
         max_age=max_age,
     )
@@ -157,14 +155,14 @@ def clear_auth_cookies(response, request):
         path="/",
         secure=secure,
         httponly=True,
-        samesite="lax",
+        samesite="none",
     )
     response.delete_cookie(
         CSRF_COOKIE_NAME,
         path="/",
         secure=secure,
         httponly=True,
-        samesite="strict",
+        samesite="none",
     )
 
 
@@ -174,18 +172,30 @@ def configure_http_security(app):
         raise RuntimeError("TATTVA_ENV must be development, test, or production")
 
     configured_origins = os.environ.get("TATTVA_CORS_ORIGINS")
-    if configured_origins is None:
-        origins = (
-            ["http://127.0.0.1:5173"]
-            if environment == "development"
-            else []
-        )
-    else:
+
+    if configured_origins:
         origins = [
             origin.strip().rstrip("/")
             for origin in configured_origins.split(",")
             if origin.strip()
         ]
+    
+    elif environment == "development":
+        origins = [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
+    
+    elif environment == "test":
+        origins = [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
+    
+    else:
+        raise RuntimeError(
+            "TATTVA_CORS_ORIGINS must be configured in production."
+        )
     if any("*" in origin for origin in origins):
         raise RuntimeError(
             "TATTVA_CORS_ORIGINS must contain explicit origins, not '*'."

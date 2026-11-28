@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const API_BASE_URL = "";
 const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const AUTH_ENDPOINTS_WITHOUT_SESSION = new Set([
   "/auth/csrf",
@@ -7,12 +7,39 @@ const AUTH_ENDPOINTS_WITHOUT_SESSION = new Set([
 ]);
 
 let csrfToken = "";
+let csrfRefreshPromise = null;
+let csrfGeneration = 0;
 
 export function setCsrfToken(token) {
   csrfToken = token || "";
 }
 
 export async function refreshCsrfToken() {
+  if (!csrfRefreshPromise) {
+    const generation = csrfGeneration;
+    const pending = _refreshCsrfToken(generation);
+
+    csrfRefreshPromise = pending;
+
+    try {
+      return await pending;
+    } finally {
+      if (csrfRefreshPromise === pending) {
+        csrfRefreshPromise = null;
+      }
+    }
+  }
+
+  return csrfRefreshPromise;
+}
+
+export function clearCsrfToken() {
+  csrfToken = "";
+  csrfGeneration += 1;
+  csrfRefreshPromise = null;
+}
+
+async function _refreshCsrfToken(generation) {
   const response = await fetch(`${API_BASE_URL}/auth/csrf`, {
     credentials: "include",
     cache: "no-store",
@@ -25,6 +52,10 @@ export async function refreshCsrfToken() {
     error.status = response.status;
     throw error;
   }
+  if (generation !== csrfGeneration) {
+    throw new Error("CSRF token refresh was superseded.");
+  }
+
   setCsrfToken(data.csrf_token);
   return csrfToken;
 }
@@ -35,6 +66,7 @@ function notifySessionExpired(url) {
     typeof window !== "undefined" &&
     !AUTH_ENDPOINTS_WITHOUT_SESSION.has(path)
   ) {
+    clearCsrfToken();
     window.dispatchEvent(new CustomEvent("tattva:session-expired"));
   }
 }
@@ -42,6 +74,7 @@ function notifySessionExpired(url) {
 export async function requestJson(url, options = {}) {
   const method = (options.method || "GET").toUpperCase();
   const headers = new Headers(options.headers || {});
+  const path = url.split("?")[0];
   if (STATE_CHANGING_METHODS.has(method)) {
     if (!csrfToken) {
       await refreshCsrfToken();
@@ -72,6 +105,9 @@ export async function requestJson(url, options = {}) {
     );
     error.status = response.status;
     throw error;
+  }
+  if (path === "/auth/logout") {
+    clearCsrfToken();
   }
 
   return data;

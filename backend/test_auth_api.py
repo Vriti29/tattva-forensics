@@ -144,7 +144,7 @@ def test_login_uses_secure_cookie_and_stores_only_token_hash(auth_system):
     cookie = response.headers["set-cookie"].lower()
     assert "httponly" in cookie
     assert "secure" in cookie
-    assert "samesite=lax" in cookie
+    assert "samesite=none" in cookie
     assert client.get("/auth/me").json()["role"] == "ADMIN"
 
     with sqlite3.connect(store.database_path) as connection:
